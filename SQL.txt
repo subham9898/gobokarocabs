@@ -1,0 +1,81 @@
+-- WARNING: This schema is for context only and is not meant to be run.
+-- Table order and constraints may not be valid for execution.
+
+CREATE TABLE public.admins (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  email text NOT NULL UNIQUE,
+  password_hash text NOT NULL,
+  role text DEFAULT 'staff'::text,
+  created_at timestamp with time zone DEFAULT timezone('utc'::text, now()),
+  CONSTRAINT admins_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.audit_logs (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  admin_id uuid,
+  admin_email text,
+  action text NOT NULL,
+  entity_type text NOT NULL,
+  entity_id text,
+  details jsonb,
+  created_at timestamp with time zone DEFAULT timezone('utc'::text, now()),
+  CONSTRAINT audit_logs_pkey PRIMARY KEY (id),
+  CONSTRAINT audit_logs_admin_id_fkey FOREIGN KEY (admin_id) REFERENCES public.admins(id)
+);
+CREATE TABLE public.cars (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  name text NOT NULL,
+  models text NOT NULL,
+  capacity text NOT NULL,
+  type text NOT NULL,
+  created_at timestamp with time zone DEFAULT now(),
+  base_city text DEFAULT 'Bokaro'::text,
+  rate_per_km numeric DEFAULT 0,
+  CONSTRAINT cars_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.leads (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  name text NOT NULL,
+  phone text NOT NULL,
+  address text NOT NULL,
+  vehicle_type text NOT NULL,
+  status text DEFAULT 'new'::text,
+  booking_details jsonb NOT NULL,
+  created_at timestamp with time zone DEFAULT now(),
+  source text DEFAULT 'Website'::text,
+  driver_details jsonb,
+  CONSTRAINT leads_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.rentals (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  city text NOT NULL,
+  hr text NOT NULL,
+  km text NOT NULL,
+  rate numeric NOT NULL,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT rentals_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.routes (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  destination text NOT NULL,
+  time text NOT NULL,
+  distance text NOT NULL,
+  sedan integer NOT NULL,
+  ertiga integer NOT NULL,
+  created_at timestamp with time zone DEFAULT now(),
+  is_bidirectional boolean DEFAULT true,
+  from text DEFAULT 'Bokaro'::text,
+  car_prices jsonb DEFAULT '{}'::jsonb,
+  CONSTRAINT routes_pkey PRIMARY KEY (id)
+);
+CREATE TABLE public.tour_packages (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  title text NOT NULL,
+  description text NOT NULL,
+  price integer NOT NULL,
+  duration text NOT NULL,
+  image_url text,
+  created_at timestamp with time zone DEFAULT now(),
+  location_pricing jsonb DEFAULT '[]'::jsonb,
+  gallery_urls jsonb DEFAULT '[]'::jsonb,
+  CONSTRAINT tour_packages_pkey PRIMARY KEY (id)
+);
