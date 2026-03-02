@@ -51,21 +51,32 @@ const Hero: React.FC = () => {
     vehicleType: 'Sedan'
   });
 
+  const [rentalData, setRentalData] = useState<any[]>([]);
+  const [availableHours, setAvailableHours] = useState<any[]>([]);
+  const [dbEvents, setDbEvents] = useState<any[]>([]);
+
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchAllData = async () => {
       try {
-        const [routesRes, carsRes] = await Promise.all([
+        const [routesRes, carsRes, rentalsRes, eventsRes] = await Promise.all([
           fetch('/api/routes'),
-          fetch('/api/cars')
+          fetch('/api/cars'),
+          fetch('/api/rentals'),
+          fetch('/api/events')
         ]);
+        
         if (routesRes.ok) setRoutesPricing(await routesRes.json());
         if (carsRes.ok) setAvailableCars(await carsRes.json());
+        if (rentalsRes.ok) setRentalData(await rentalsRes.json());
+        if (eventsRes.ok) setDbEvents(await eventsRes.json());
       } catch (err) {
-        console.error('Failed to fetch data');
+        console.error('Failed to fetch data', err);
       }
     };
-    fetchData();
+    fetchAllData();
   }, []);
+
+  const activeEvents = dbEvents.length > 0 ? dbEvents.map(e => e.name) : EVENTS;
 
   const cities = [
     'Bokaro Steel City',
@@ -74,24 +85,6 @@ const Hero: React.FC = () => {
     'Bhubaneswar', 'Siliguri', 'Puri'
   ];
   const UNIQUE_CITIES = Array.from(new Set(cities)).sort();
-
-  const [rentalData, setRentalData] = useState<any[]>([]);
-  const [availableHours, setAvailableHours] = useState<any[]>([]);
-
-  useEffect(() => {
-    const fetchRentals = async () => {
-      try {
-        const res = await fetch('/api/rentals');
-        if (res.ok) {
-          const data = await res.json();
-          setRentalData(data);
-        }
-      } catch (err) {
-        console.error("Failed to fetch rentals:", err);
-      }
-    };
-    fetchRentals();
-  }, []);
 
   // Update available hours when "from" (city) changes in Local Rental mode
   useEffect(() => {
@@ -346,7 +339,7 @@ const Hero: React.FC = () => {
                           className="bg-transparent font-black text-gray-900 text-sm sm:text-base w-full focus:outline-none appearance-none cursor-pointer"
                         >
                           <option value="" disabled>Event</option>
-                          {EVENTS.map(event => <option key={event} value={event}>{event}</option>)}
+                          {activeEvents.map(event => <option key={event} value={event}>{event}</option>)}
                         </select>
                         <span className="text-[8px] font-bold text-gray-400 leading-none mt-1 uppercase">OCCASION</span>
                       </div>

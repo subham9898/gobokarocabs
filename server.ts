@@ -248,6 +248,13 @@ async function startServer() {
     res.json(data);
   });
 
+  app.delete("/api/admin/leads/:id", authenticateAdmin, async (req, res) => {
+    if (!isSupabaseConfigured()) return res.status(500).json({ error: "Supabase not configured" });
+    const { error } = await supabase.from('leads').delete().eq('id', req.params.id);
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ success: true });
+  });
+
   // Routes Management
   app.get("/api/routes", async (req, res) => {
     let data, error;
@@ -448,6 +455,108 @@ async function startServer() {
     }
     
     const { error } = await supabase.from('rentals').delete().eq('id', req.params.id);
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ success: true });
+  });
+
+  // Roundtrips Management
+  app.get("/api/roundtrips", async (req, res) => {
+    let data, error;
+    if (isSupabaseConfigured()) {
+      const result = await supabase.from('roundtrips').select('*').order('destination');
+      data = result.data;
+      error = result.error;
+    } else {
+      data = [];
+      error = null;
+    }
+    if (error) return res.status(500).json({ error: error?.message || 'Supabase not configured' });
+    res.json(data);
+  });
+
+  app.get("/api/admin/roundtrips", authenticateAdmin, async (req, res) => {
+    let data, error;
+    if (isSupabaseConfigured()) {
+      const result = await supabase.from('roundtrips').select('*').order('destination');
+      data = result.data;
+      error = result.error;
+    } else {
+      data = [];
+      error = null;
+    }
+    if (error) return res.status(500).json({ error: error?.message || 'Supabase not configured' });
+    res.json(data);
+  });
+
+  app.post("/api/admin/roundtrips", authenticateAdmin, async (req, res) => {
+    const roundtrip = req.body;
+    if (!isSupabaseConfigured()) return res.status(500).json({ error: "Supabase not configured" });
+    
+    if (roundtrip.id) {
+      const { data, error } = await supabase.from('roundtrips').update(roundtrip).eq('id', roundtrip.id).select().single();
+      if (error) return res.status(500).json({ error: error.message });
+      res.json(data);
+    } else {
+      const { data, error } = await supabase.from('roundtrips').insert([roundtrip]).select().single();
+      if (error) return res.status(500).json({ error: error.message });
+      res.json(data);
+    }
+  });
+
+  app.delete("/api/admin/roundtrips/:id", authenticateAdmin, async (req, res) => {
+    if (!isSupabaseConfigured()) return res.status(500).json({ error: "Supabase not configured" });
+    const { error } = await supabase.from('roundtrips').delete().eq('id', req.params.id);
+    if (error) return res.status(500).json({ error: error.message });
+    res.json({ success: true });
+  });
+
+  // Events Management
+  app.get("/api/events", async (req, res) => {
+    let data, error;
+    if (isSupabaseConfigured()) {
+      const result = await supabase.from('events').select('*').order('name');
+      data = result.data;
+      error = result.error;
+    } else {
+      data = [];
+      error = null;
+    }
+    if (error) return res.status(500).json({ error: error?.message || 'Supabase not configured' });
+    res.json(data);
+  });
+
+  app.get("/api/admin/events", authenticateAdmin, async (req, res) => {
+    let data, error;
+    if (isSupabaseConfigured()) {
+      const result = await supabase.from('events').select('*').order('name');
+      data = result.data;
+      error = result.error;
+    } else {
+      data = [];
+      error = null;
+    }
+    if (error) return res.status(500).json({ error: error?.message || 'Supabase not configured' });
+    res.json(data);
+  });
+
+  app.post("/api/admin/events", authenticateAdmin, async (req, res) => {
+    const event = req.body;
+    if (!isSupabaseConfigured()) return res.status(500).json({ error: "Supabase not configured" });
+    
+    if (event.id) {
+      const { data, error } = await supabase.from('events').update(event).eq('id', event.id).select().single();
+      if (error) return res.status(500).json({ error: error.message });
+      res.json(data);
+    } else {
+      const { data, error } = await supabase.from('events').insert([event]).select().single();
+      if (error) return res.status(500).json({ error: error.message });
+      res.json(data);
+    }
+  });
+
+  app.delete("/api/admin/events/:id", authenticateAdmin, async (req, res) => {
+    if (!isSupabaseConfigured()) return res.status(500).json({ error: "Supabase not configured" });
+    const { error } = await supabase.from('events').delete().eq('id', req.params.id);
     if (error) return res.status(500).json({ error: error.message });
     res.json({ success: true });
   });

@@ -84,6 +84,24 @@ interface RentalPrice {
   rate: number;
 }
 
+interface RoundtripPrice {
+  id: string;
+  from: string;
+  destination: string;
+  time: string;
+  distance: string;
+  sedan: number;
+  ertiga: number;
+}
+
+interface EventManage {
+  id: string;
+  name: string;
+  description: string;
+  base_price_sedan: number;
+  base_price_suv: number;
+}
+
 interface Car {
   id: string;
   name: string;
@@ -157,10 +175,12 @@ const Modal: React.FC<{
 const Admin: React.FC = () => {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [routes, setRoutes] = useState<RoutePrice[]>([]);
+  const [roundtrips, setRoundtrips] = useState<RoundtripPrice[]>([]);
+  const [events, setEvents] = useState<EventManage[]>([]);
   const [rentals, setRentals] = useState<RentalPrice[]>([]);
   const [cars, setCars] = useState<Car[]>([]);
   const [tourPackages, setTourPackages] = useState<TourPackage[]>([]);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'leads' | 'calendar' | 'routes' | 'rentals' | 'cars' | 'tours'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'leads' | 'calendar' | 'routes' | 'roundtrips' | 'rentals' | 'events' | 'cars' | 'tours'>('dashboard');
   const [loading, setLoading] = useState(true);
   const [password, setPassword] = useState('');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -175,9 +195,13 @@ const Admin: React.FC = () => {
 
   // Form states
   const [isRouteModalOpen, setIsRouteModalOpen] = useState(false);
+  const [isRoundtripModalOpen, setIsRoundtripModalOpen] = useState(false);
+  const [isEventModalOpen, setIsEventModalOpen] = useState(false);
   const [isRentalModalOpen, setIsRentalModalOpen] = useState(false);
   const [isCarModalOpen, setIsCarModalOpen] = useState(false);
   const [editingRoute, setEditingRoute] = useState<Partial<RoutePrice> | null>(null);
+  const [editingRoundtrip, setEditingRoundtrip] = useState<Partial<RoundtripPrice> | null>(null);
+  const [editingEvent, setEditingEvent] = useState<Partial<EventManage> | null>(null);
   const [editingRental, setEditingRental] = useState<Partial<RentalPrice> | null>(null);
   const [editingCar, setEditingCar] = useState<Partial<Car> | null>(null);
   const [editingTour, setEditingTour] = useState<Partial<TourPackage> | null>(null);
@@ -194,6 +218,40 @@ const Admin: React.FC = () => {
   const [showCalculator, setShowCalculator] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
   const [isAddLeadModalOpen, setIsAddLeadModalOpen] = useState(false);
+  
+  // Search & Filter States
+  const [leadSearch, setLeadLeadSearch] = useState('');
+  const [leadStatusFilter, setLeadStatusFilter] = useState<string>('all');
+  const [leadDateFilter, setLeadDateFilter] = useState<string>('all');
+  const [leadStartDate, setLeadStartDate] = useState<string>('');
+  const [leadEndDate, setLeadEndDate] = useState<string>('');
+  const [leadTypeFilter, setLeadTypeFilter] = useState<string>('all');
+  const [leadVehicleFilter, setLeadTypeVehicleFilter] = useState<string>('all');
+
+  const [routeSearch, setRouteSearch] = useState('');
+  const [routeOriginFilter, setRouteOriginFilter] = useState<string>('all');
+  const [routeDestFilter, setRouteDestFilter] = useState<string>('all');
+  const [routePriceMax, setRoutePriceMax] = useState<string>('');
+
+  const [roundtripSearch, setRoundtripSearch] = useState('');
+  const [roundtripOriginFilter, setRoundtripOriginFilter] = useState<string>('all');
+  const [roundtripDestFilter, setRoundtripDestFilter] = useState<string>('all');
+  const [eventSearch, setEventSearch] = useState('');
+
+  const [rentalSearch, setRentalSearch] = useState('');
+  const [rentalCityFilter, setRentalCityFilter] = useState<string>('all');
+  const [rentalHourFilter, setRentalHourFilter] = useState<string>('all');
+
+  const [carSearch, setCarSearch] = useState('');
+  const [carTypeFilter, setCarTypeFilter] = useState<string>('all');
+
+  const [tourSearch, setTourSearch] = useState('');
+  const [tourPriceMax, setTourPriceMax] = useState<string>('');
+
+  // Inquiry Edit States
+  const [isEditLeadModalOpen, setIsEditLeadModalOpen] = useState(false);
+  const [editingLead, setEditingLead] = useState<Lead | null>(null);
+
   const [newLead, setNewLead] = useState<Pick<Lead, 'name' | 'phone' | 'address' | 'vehicleType' | 'bookingDetails'>>({ 
     name: '',
     phone: '',
@@ -229,34 +287,54 @@ const Admin: React.FC = () => {
   const fetchData = async () => {
     if (!token) return;
     setLoading(true);
+    
+    const headers = { 'Authorization': `Bearer ${token}` };
+    const resources = [
+      { key: 'leads', url: '/api/admin/leads', setter: setLeads },
+      { key: 'routes', url: '/api/admin/routes', setter: setRoutes },
+      { key: 'roundtrips', url: '/api/admin/roundtrips', setter: setRoundtrips },
+      { key: 'rentals', url: '/api/admin/rentals', setter: setRentals },
+      { key: 'events', url: '/api/admin/events', setter: setEvents },
+      { key: 'cars', url: '/api/admin/cars', setter: setCars },
+      { key: 'tours', url: '/api/admin/tour-packages', setter: setTourPackages }
+    ];
+
     try {
-      const headers = { 'Authorization': `Bearer ${token}` };
-      const [leadsRes, routesRes, rentalsRes, carsRes, toursRes] = await Promise.all([
-        fetch('/api/admin/leads', { headers }),
-        fetch('/api/admin/routes', { headers }),
-        fetch('/api/admin/rentals', { headers }),
-        fetch('/api/admin/cars', { headers }),
-        fetch('/api/admin/tour-packages', { headers })
-      ]);
+      const results = await Promise.all(
+        resources.map(async (res) => {
+          try {
+            const response = await fetch(res.url, { headers });
+            if (response.status === 403 || response.status === 401) {
+              handleLogout();
+              return { key: res.key, success: false, authError: true };
+            }
+            if (response.ok) {
+              const data = await response.json();
+              res.setter(data);
+              return { key: res.key, success: true };
+            }
+            return { key: res.key, success: false };
+          } catch (err) {
+            return { key: res.key, success: false };
+          }
+        })
+      );
 
-      if (leadsRes.status === 403 || leadsRes.status === 401) {
-        handleLogout();
-        return;
+      const failed = results.filter(r => !r.success);
+      if (failed.length > 0) {
+        console.warn('Some resources failed to fetch:', failed.map(f => f.key).join(', '));
+        // Only notify if critical resources fail or if the current tab's resource fails
+        const currentResourceFailed = failed.find(f => 
+          (activeTab === 'leads' && f.key === 'leads') ||
+          (activeTab === 'routes' && f.key === 'routes') ||
+          (activeTab === 'events' && f.key === 'events')
+        );
+        if (currentResourceFailed) {
+          addNotification(`Failed to fetch ${currentResourceFailed.key} data. Ensure tables exist.`, 'error');
+        }
       }
-
-      if (!leadsRes.ok) throw new Error((await leadsRes.json()).error || 'Leads fetch failed');
-      if (!routesRes.ok) throw new Error((await routesRes.json()).error || 'Routes fetch failed');
-      if (!rentalsRes.ok) throw new Error((await rentalsRes.json()).error || 'Rentals fetch failed');
-      if (!carsRes.ok) throw new Error((await carsRes.json()).error || 'Cars fetch failed');
-      if (!toursRes.ok) throw new Error((await toursRes.json()).error || 'Tours fetch failed');
-
-      setLeads(await leadsRes.json());
-      setRoutes(await routesRes.json());
-      setRentals(await rentalsRes.json());
-      setCars(await carsRes.json());
-      setTourPackages(await toursRes.json());
-    } catch (err: any) {
-      addNotification(err.message || 'Failed to fetch data', 'error');
+    } catch (err) {
+      addNotification('Failed to connect to server', 'error');
     } finally {
       setLoading(false);
     }
@@ -289,6 +367,55 @@ const Admin: React.FC = () => {
       }
     } catch (err) {
       addNotification('Failed to update status', 'error');
+    }
+  };
+
+  const handleUpdateLead = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingLead) return;
+    try {
+      // Map to DB fields
+      const dbData = {
+        name: editingLead.name,
+        phone: editingLead.phone,
+        address: editingLead.address,
+        vehicle_type: editingLead.vehicleType,
+        booking_details: editingLead.bookingDetails,
+        status: editingLead.status
+      };
+
+      const response = await fetch(`/api/admin/leads/${editingLead.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(dbData)
+      });
+      if (response.ok) {
+        addNotification('Inquiry updated successfully', 'success');
+        setIsEditLeadModalOpen(false);
+        setEditingLead(null);
+        fetchData();
+      }
+    } catch (err) {
+      addNotification('Failed to update inquiry', 'error');
+    }
+  };
+
+  const handleDeleteLead = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this inquiry forever?')) return;
+    try {
+      const response = await fetch(`/api/admin/leads/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        addNotification('Inquiry deleted', 'success');
+        fetchData();
+      }
+    } catch (err) {
+      addNotification('Failed to delete inquiry', 'error');
     }
   };
 
@@ -331,6 +458,84 @@ const Admin: React.FC = () => {
       }
     } catch (err) {
       addNotification('Network error during deletion', 'error');
+    }
+  };
+
+  const handleSaveRoundtrip = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingRoundtrip) return;
+    try {
+      const response = await fetch('/api/admin/roundtrips', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(editingRoundtrip)
+      });
+      if (response.ok) {
+        addNotification(editingRoundtrip.id ? 'Roundtrip updated' : 'Roundtrip added', 'success');
+        setIsRoundtripModalOpen(false);
+        setEditingRoundtrip(null);
+        fetchData();
+      }
+    } catch (err) {
+      addNotification('Failed to save roundtrip', 'error');
+    }
+  };
+
+  const handleDeleteRoundtrip = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this roundtrip?')) return;
+    try {
+      const response = await fetch(`/api/admin/roundtrips/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        addNotification('Roundtrip deleted', 'success');
+        fetchData();
+      }
+    } catch (err) {
+      addNotification('Failed to delete roundtrip', 'error');
+    }
+  };
+
+  const handleSaveEvent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingEvent) return;
+    try {
+      const response = await fetch('/api/admin/events', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(editingEvent)
+      });
+      if (response.ok) {
+        addNotification(editingEvent.id ? 'Event updated' : 'Event added', 'success');
+        setIsEventModalOpen(false);
+        setEditingEvent(null);
+        fetchData();
+      }
+    } catch (err) {
+      addNotification('Failed to save event', 'error');
+    }
+  };
+
+  const handleDeleteEvent = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this event?')) return;
+    try {
+      const response = await fetch(`/api/admin/events/${id}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (response.ok) {
+        addNotification('Event deleted', 'success');
+        fetchData();
+      }
+    } catch (err) {
+      addNotification('Failed to delete event', 'error');
     }
   };
 
@@ -459,11 +664,128 @@ const Admin: React.FC = () => {
     document.body.removeChild(link);
   };
 
+  // Filter Logic
+  const filteredLeads = leads.filter(l => {
+    const matchesSearch = l.name.toLowerCase().includes(leadSearch.toLowerCase()) || 
+                         l.phone.includes(leadSearch) || 
+                         l.bookingDetails.from.toLowerCase().includes(leadSearch.toLowerCase()) ||
+                         l.bookingDetails.to.toLowerCase().includes(leadSearch.toLowerCase());
+    
+    const matchesStatus = leadStatusFilter === 'all' || l.status === leadStatusFilter;
+    const matchesTripType = leadTypeFilter === 'all' || l.bookingDetails.tripType === leadTypeFilter;
+    const matchesVehicle = leadVehicleFilter === 'all' || l.vehicleType === leadVehicleFilter;
+
+    let matchesDate = true;
+    if (leadDateFilter === 'custom') {
+      if (l.createdAt) {
+        const leadDate = new Date(l.createdAt);
+        if (leadStartDate) {
+          const start = new Date(leadStartDate);
+          start.setHours(0, 0, 0, 0);
+          if (leadDate < start) matchesDate = false;
+        }
+        if (leadEndDate) {
+          const end = new Date(leadEndDate);
+          end.setHours(23, 59, 59, 999);
+          if (leadDate > end) matchesDate = false;
+        }
+      }
+    } else if (leadDateFilter !== 'all' && l.createdAt) {
+      const leadDate = new Date(l.createdAt);
+      const now = new Date();
+      if (leadDateFilter === 'today') {
+        matchesDate = leadDate.toDateString() === now.toDateString();
+      } else if (leadDateFilter === 'week') {
+        const weekAgo = new Date(now.setDate(now.getDate() - 7));
+        matchesDate = leadDate >= weekAgo;
+      } else if (leadDateFilter === 'month') {
+        const monthAgo = new Date(now.setMonth(now.getMonth() - 1));
+        matchesDate = leadDate >= monthAgo;
+      }
+    }
+
+    return matchesSearch && matchesStatus && matchesTripType && matchesVehicle && matchesDate;
+  });
+
+  const filteredRoutes = routes.filter(r => {
+    const matchesSearch = r.from.toLowerCase().includes(routeSearch.toLowerCase()) || 
+                         r.destination.toLowerCase().includes(routeSearch.toLowerCase());
+    const matchesOrigin = routeOriginFilter === 'all' || r.from === routeOriginFilter;
+    const matchesDest = routeDestFilter === 'all' || r.destination === routeDestFilter;
+    const matchesPrice = !routePriceMax || r.sedan <= parseInt(routePriceMax);
+    return matchesSearch && matchesOrigin && matchesDest && matchesPrice;
+  });
+
+  const filteredRoundtrips = roundtrips.filter(r => {
+    const matchesSearch = r.from.toLowerCase().includes(roundtripSearch.toLowerCase()) || 
+                         r.destination.toLowerCase().includes(roundtripSearch.toLowerCase());
+    const matchesOrigin = roundtripOriginFilter === 'all' || r.from === roundtripOriginFilter;
+    const matchesDest = roundtripDestFilter === 'all' || r.destination === roundtripDestFilter;
+    return matchesSearch && matchesOrigin && matchesDest;
+  });
+
+  const filteredRentals = rentals.filter(r => {
+    const matchesSearch = r.city.toLowerCase().includes(rentalSearch.toLowerCase());
+    const matchesCity = rentalCityFilter === 'all' || r.city === rentalCityFilter;
+    const matchesHours = rentalHourFilter === 'all' || r.hr === rentalHourFilter;
+    return matchesSearch && matchesCity && matchesHours;
+  });
+
+  const filteredCars = cars.filter(c => {
+    const matchesSearch = c.name.toLowerCase().includes(carSearch.toLowerCase()) || 
+                         c.models.toLowerCase().includes(carSearch.toLowerCase());
+    const matchesType = carTypeFilter === 'all' || c.type === carTypeFilter;
+    return matchesSearch && matchesType;
+  });
+
+  const filteredTours = tourPackages.filter(t => {
+    const matchesSearch = t.title.toLowerCase().includes(tourSearch.toLowerCase()) || 
+                         t.description.toLowerCase().includes(tourSearch.toLowerCase());
+    const matchesPrice = !tourPriceMax || t.price <= parseInt(tourPriceMax);
+    return matchesSearch && matchesPrice;
+  });
+
+  // Export roundtrips to CSV
+  const exportRoundtripsToCSV = () => {
+    setIsDownloading(true);
+    const headers = ['ID', 'From', 'Destination', 'Time', 'Distance', 'Sedan Price', 'SUV Price'];
+    const formattedData = filteredRoundtrips.map(trip => ({
+      'ID': trip.id,
+      'From': trip.from,
+      'Destination': trip.destination,
+      'Time': trip.time,
+      'Distance': trip.distance,
+      'Sedan Price': trip.sedan,
+      'SUV Price': trip.ertiga
+    }));
+    
+    exportToCSV(formattedData, `roundtrips-${new Date().toISOString().slice(0, 10)}.csv`, headers);
+    addNotification('Roundtrips exported successfully!', 'success');
+    setIsDownloading(false);
+  };
+
+  // Export events to CSV
+  const exportEventsToCSV = () => {
+    setIsDownloading(true);
+    const headers = ['ID', 'Name', 'Description', 'Sedan Base', 'SUV Base'];
+    const formattedData = filteredEvents.map(event => ({
+      'ID': event.id,
+      'Name': event.name,
+      'Description': event.description,
+      'Sedan Base': event.base_price_sedan,
+      'SUV Base': event.base_price_suv
+    }));
+    
+    exportToCSV(formattedData, `events-${new Date().toISOString().slice(0, 10)}.csv`, headers);
+    addNotification('Events exported successfully!', 'success');
+    setIsDownloading(false);
+  };
+
   // Export leads to CSV
   const exportLeadsToCSV = () => {
     setIsDownloading(true);
     const headers = ['ID', 'Name', 'Phone', 'Address', 'Vehicle Type', 'Status', 'Created At', 'From', 'To', 'Date', 'Time', 'Trip Type'];
-    const formattedData = leads.map(lead => ({
+    const formattedData = filteredLeads.map(lead => ({
       'ID': lead.id,
       'Name': lead.name,
       'Phone': lead.phone,
@@ -487,7 +809,7 @@ const Admin: React.FC = () => {
   const exportRoutesToCSV = () => {
     setIsDownloading(true);
     const headers = ['ID', 'From', 'Destination', 'Time', 'Distance', 'Sedan Price', 'SUV Price'];
-    const formattedData = routes.map(route => ({
+    const formattedData = filteredRoutes.map(route => ({
       'ID': route.id,
       'From': route.from || 'Bokaro',
       'Destination': route.destination,
@@ -506,7 +828,7 @@ const Admin: React.FC = () => {
   const exportCarsToCSV = () => {
     setIsDownloading(true);
     const headers = ['ID', 'Name', 'Models', 'Capacity', 'Type'];
-    const formattedData = cars.map(car => ({
+    const formattedData = filteredCars.map(car => ({
       'ID': car.id,
       'Name': car.name,
       'Models': car.models,
@@ -523,7 +845,7 @@ const Admin: React.FC = () => {
   const exportToursToCSV = () => {
     setIsDownloading(true);
     const headers = ['ID', 'Title', 'Description', 'Price', 'Duration', 'Image URL', 'Created At'];
-    const formattedData = tourPackages.map(pkg => ({
+    const formattedData = filteredTours.map(pkg => ({
       'ID': pkg.id,
       'Title': pkg.title,
       'Description': pkg.description,
@@ -829,10 +1151,16 @@ const Admin: React.FC = () => {
       {/* Sidebar - Desktop */}
       <aside className="hidden md:flex w-72 bg-black text-white flex-col p-8 sticky top-0 h-screen">
         <div className="flex items-center gap-4 mb-12">
-          <div className="w-12 h-12 bg-[#A3E635] rounded-2xl flex items-center justify-center text-black font-black text-xl">GB</div>
+          <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center overflow-hidden border-2 border-[#A3E635]">
+            <img 
+              src="https://res.cloudinary.com/dn6sk8mqh/image/upload/v1771266719/Screenshot_2026-02-16_235537_ru81eo.png" 
+              alt="Logo" 
+              className="w-full h-full object-cover scale-110"
+            />
+          </div>
           <div>
-            <h1 className="text-lg font-black tracking-tighter">ADMIN</h1>
-            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Control Panel</p>
+            <h1 className="text-lg font-black tracking-tighter leading-none">GO BOKARO</h1>
+            <p className="text-[10px] font-bold text-[#A3E635] uppercase tracking-widest mt-1">Admin Panel</p>
           </div>
         </div>
 
@@ -841,8 +1169,10 @@ const Admin: React.FC = () => {
             { id: 'dashboard', label: 'Dashboard', icon: TrendingUp },
             { id: 'leads', label: 'Inquiries', icon: Users },
             { id: 'calendar', label: 'Calendar', icon: Calendar },
-            { id: 'routes', label: 'Intercity Pricing', icon: MapPin },
-            { id: 'rentals', label: 'Rental Pricing', icon: Clock },
+            { id: 'routes', label: 'Intercity', icon: MapPin },
+            { id: 'roundtrips', label: 'Roundtrips', icon: ArrowRightLeft },
+            { id: 'rentals', label: 'Rentals', icon: Clock },
+            { id: 'events', label: 'Events', icon: ImageIcon },
             { id: 'cars', label: 'Fleet', icon: CarIcon },
             { id: 'tours', label: 'Tours', icon: Map },
           ].map(item => (
@@ -891,7 +1221,9 @@ const Admin: React.FC = () => {
           { id: 'leads', icon: Users },
           { id: 'calendar', icon: Calendar },
           { id: 'routes', icon: MapPin },
+          { id: 'roundtrips', icon: ArrowRightLeft },
           { id: 'rentals', icon: Clock },
+          { id: 'events', icon: ImageIcon },
           { id: 'cars', icon: CarIcon },
           { id: 'tours', icon: Map },
         ].map(item => (
@@ -916,13 +1248,17 @@ const Admin: React.FC = () => {
             <h2 className="text-3xl md:text-4xl font-black text-gray-900 tracking-tight capitalize">
               {activeTab === 'leads' ? 'Booking Inquiries' : 
                activeTab === 'routes' ? 'Intercity Pricing' : 
+               activeTab === 'roundtrips' ? 'Roundtrip Pricing' : 
                activeTab === 'rentals' ? 'Rental Pricing' : 
+               activeTab === 'events' ? 'Event Management' : 
                activeTab === 'cars' ? 'Fleet Management' : 'Tour Packages'}
             </h2>
             <p className="text-gray-400 font-bold uppercase tracking-widest text-[10px] mt-1">
               {activeTab === 'leads' ? 'Manage customer requests and status' : 
                activeTab === 'routes' ? 'Update intercity travel fares' : 
+               activeTab === 'roundtrips' ? 'Update roundtrip travel fares' : 
                activeTab === 'rentals' ? 'Update local city rental rates' : 
+               activeTab === 'events' ? 'Update event specific packages' : 
                activeTab === 'cars' ? 'Manage available vehicles' : 'Create and manage tour packages'}
             </p>
           </div>
@@ -943,6 +1279,52 @@ const Admin: React.FC = () => {
               >
                 <Download size={18} />
                 Export Leads
+              </button>
+            </div>
+          )}
+
+          {activeTab === 'roundtrips' && (
+            <div className="flex gap-3">
+              <button 
+                onClick={() => {
+                  setEditingRoundtrip({ from: 'Bokaro' });
+                  setIsRoundtripModalOpen(true);
+                }}
+                className="bg-black text-[#A3E635] px-6 py-4 rounded-2xl font-black uppercase tracking-widest text-xs flex items-center gap-3 shadow-xl hover:scale-105 transition-all"
+              >
+                <Plus size={18} />
+                Add Roundtrip
+              </button>
+              <button 
+                onClick={exportRoundtripsToCSV}
+                disabled={isDownloading}
+                className="bg-[#A3E635] text-black px-6 py-4 rounded-2xl font-black uppercase tracking-widest text-xs flex items-center gap-3 shadow-xl hover:scale-105 transition-all disabled:opacity-50"
+              >
+                <Download size={18} />
+                Export CSV
+              </button>
+            </div>
+          )}
+
+          {activeTab === 'events' && (
+            <div className="flex gap-3">
+              <button 
+                onClick={() => {
+                  setEditingEvent({});
+                  setIsEventModalOpen(true);
+                }}
+                className="bg-black text-[#A3E635] px-6 py-4 rounded-2xl font-black uppercase tracking-widest text-xs flex items-center gap-3 shadow-xl hover:scale-105 transition-all"
+              >
+                <Plus size={18} />
+                Add Event
+              </button>
+              <button 
+                onClick={exportEventsToCSV}
+                disabled={isDownloading}
+                className="bg-[#A3E635] text-black px-6 py-4 rounded-2xl font-black uppercase tracking-widest text-xs flex items-center gap-3 shadow-xl hover:scale-105 transition-all disabled:opacity-50"
+              >
+                <Download size={18} />
+                Export CSV
               </button>
             </div>
           )}
@@ -1014,6 +1396,30 @@ const Admin: React.FC = () => {
               </button>
             </div>
           )}
+
+          {activeTab === 'tours' && (
+            <div className="flex gap-3">
+              <button 
+                onClick={() => {
+                  setEditingTour({ title: '', description: '', price: 0, duration: '' });
+                  setLocationPricing([]);
+                  setIsTourModalOpen(true);
+                }}
+                className="bg-black text-[#A3E635] px-6 py-4 rounded-2xl font-black uppercase tracking-widest text-xs flex items-center gap-3 shadow-xl hover:scale-105 transition-all"
+              >
+                <Plus size={18} />
+                Add Package
+              </button>
+              <button 
+                onClick={exportToursToCSV}
+                disabled={isDownloading}
+                className="bg-[#A3E635] text-black px-6 py-4 rounded-2xl font-black uppercase tracking-widest text-xs flex items-center gap-3 shadow-xl hover:scale-105 transition-all disabled:opacity-50"
+              >
+                <Download size={18} />
+                Export Tours
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Content Area */}
@@ -1049,26 +1455,40 @@ const Admin: React.FC = () => {
             return (
               <div className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div className="bg-white p-8 rounded-[2rem] border border-gray-100 shadow-sm">
-                    <TrendingUp className="text-lime-500 mb-4" size={32} />
-                    <h3 className="text-5xl font-black text-gray-900 tracking-tighter">{conversionRate}%</h3>
-                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1">Conversion Rate</p>
-                  </div>
-                  <div className="bg-white p-8 rounded-[2rem] border border-gray-100 shadow-sm">
-                    <Map className="text-blue-500 mb-4" size={32} />
-                    <div className="space-y-3 mt-4">
-                      {topRoutes.length > 0 ? topRoutes.map(([route, count]) => (
-                        <div key={route} className="flex justify-between items-center">
-                          <span className="font-bold text-gray-900 text-sm">{route}</span>
-                          <span className="text-[10px] bg-gray-100 px-2 py-1 rounded-full font-black">{count} bookings</span>
-                        </div>
-                      )) : <p className="text-sm text-gray-400">No route data yet</p>}
+                  {/* Conversion Rate Card */}
+                  <div className="bg-white p-8 rounded-[2rem] border border-gray-100 shadow-sm relative overflow-hidden group">
+                    <div className="relative z-10">
+                      <TrendingUp className="text-lime-500 mb-4" size={32} />
+                      <h3 className="text-5xl font-black text-gray-900 tracking-tighter">{conversionRate}%</h3>
+                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1">Conversion Rate</p>
                     </div>
-                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-4">Top Routes</p>
+                    <div className="absolute -right-4 -bottom-4 opacity-5 group-hover:scale-110 transition-transform duration-700">
+                      <TrendingUp size={160} />
+                    </div>
                   </div>
+
+                  {/* Package Management Shortcut */}
+                  <div className="bg-white p-8 rounded-[2rem] border border-gray-100 shadow-sm relative overflow-hidden group">
+                    <div className="relative z-10">
+                      <Map className="text-blue-500 mb-4" size={32} />
+                      <h3 className="text-2xl font-black text-gray-900 tracking-tight">Package Management</h3>
+                      <p className="text-xs text-gray-400 mt-1 mb-6">Manage your custom tour offerings.</p>
+                      <button 
+                        onClick={() => setActiveTab('tours')}
+                        className="bg-blue-50 text-blue-600 px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center gap-2 hover:bg-blue-600 hover:text-white transition-all"
+                      >
+                        Go to Tours <ChevronRight size={14} />
+                      </button>
+                    </div>
+                    <div className="absolute -right-4 -bottom-4 opacity-5 group-hover:scale-110 transition-transform duration-700">
+                      <Map size={160} />
+                    </div>
+                  </div>
+
+                  {/* Quick Actions Card */}
                   <div className="bg-black text-white p-8 rounded-[2rem] shadow-xl">
-                    <h3 className="text-xl font-black tracking-tight mb-2">Quick Actions</h3>
-                    <p className="text-xs text-gray-400 mb-6">Manage your fleet and pricing</p>
+                    <h3 className="text-xl font-black tracking-tight mb-1">Quick access to booking leads</h3>
+                    <p className="text-[10px] text-gray-400 uppercase tracking-widest mb-6">Handle Bookings and New Inquiries.</p>
                     <div className="space-y-3">
                       <button onClick={() => setActiveTab('leads')} className="w-full bg-[#A3E635] text-black px-4 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest flex justify-between items-center hover:scale-[1.02] transition-transform">
                         View New Leads <ChevronRight size={14} />
@@ -1080,22 +1500,55 @@ const Admin: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
-                  <h3 className="text-xl font-black text-gray-900 tracking-tight mb-8">Lead Volume (Last 7 Days)</h3>
-                  <div className="h-[300px] w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={chartData}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
-                        <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 'bold', fill: '#9ca3af'}} />
-                        <YAxis axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 'bold', fill: '#9ca3af'}} />
-                        <Tooltip 
-                          cursor={{fill: '#f9fafb'}}
-                          contentStyle={{borderRadius: '1rem', border: 'none', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)'}}
-                        />
-                        <Bar dataKey="Leads" fill="#e5e7eb" radius={[4, 4, 0, 0]} />
-                        <Bar dataKey="Booked" fill="#A3E635" radius={[4, 4, 0, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Frequent Routes Section */}
+                  <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
+                    <div className="flex justify-between items-center mb-8">
+                      <h3 className="text-xl font-black text-gray-900 tracking-tight">Most Frequent Routes</h3>
+                      <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">All Time</span>
+                    </div>
+                    <div className="space-y-4">
+                      {(topRoutes.length > 0 ? topRoutes : [
+                        ['Bokaro to Asansol', 2],
+                        ['Ranchi to Bokaro', 1],
+                        ['Bokaro to Ranchi', 1]
+                      ]).map(([route, count]) => (
+                        <div key={route} className="flex items-center gap-4 bg-gray-50 p-4 rounded-2xl hover:bg-lime-50/50 transition-colors group">
+                          <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-gray-400 group-hover:text-[#A3E635] shadow-sm transition-colors">
+                            <MapPin size={18} />
+                          </div>
+                          <div className="flex-grow">
+                            <p className="font-bold text-gray-900 text-sm">{route}</p>
+                            <div className="flex items-center gap-2 mt-1">
+                              <div className="h-1.5 bg-gray-200 rounded-full flex-grow overflow-hidden">
+                                <div className="h-full bg-[#A3E635]" style={{ width: `${(count as number) * 20}%` }} />
+                              </div>
+                              <span className="text-[10px] font-black text-gray-400 min-w-[60px]">{count} bookings</span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Weekly Performance Chart */}
+                  <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
+                    <h3 className="text-xl font-black text-gray-900 tracking-tight mb-8">Weekly Lead Performance</h3>
+                    <div className="h-[250px] w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={chartData}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
+                          <XAxis dataKey="date" axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 'bold', fill: '#9ca3af'}} />
+                          <YAxis axisLine={false} tickLine={false} tick={{fontSize: 10, fontWeight: 'bold', fill: '#9ca3af'}} />
+                          <Tooltip 
+                            cursor={{fill: '#f9fafb'}}
+                            contentStyle={{borderRadius: '1rem', border: 'none', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)'}}
+                          />
+                          <Bar dataKey="Leads" fill="#e5e7eb" radius={[4, 4, 0, 0]} />
+                          <Bar dataKey="Booked" fill="#A3E635" radius={[4, 4, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1144,6 +1597,98 @@ const Admin: React.FC = () => {
           
           {activeTab === 'leads' && (
             <>
+              {/* Filter Bar */}
+              <div className="bg-white p-6 rounded-[2.5rem] border border-gray-100 shadow-sm space-y-4 mb-8">
+                <div className="flex flex-col md:flex-row gap-4">
+                  <div className="flex-grow relative">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                    <input 
+                      type="text" 
+                      placeholder="Search by name, phone or city"
+                      value={leadSearch}
+                      onChange={(e) => setLeadLeadSearch(e.target.value)}
+                      className="w-full bg-gray-50 rounded-2xl py-3 pl-12 pr-4 font-bold text-sm outline-none focus:ring-2 focus:ring-[#A3E635]/20 focus:bg-white transition-all"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <select 
+                      value={leadStatusFilter}
+                      onChange={(e) => setLeadStatusFilter(e.target.value)}
+                      className="bg-gray-50 rounded-xl py-2 px-4 font-bold text-[10px] uppercase tracking-widest outline-none hover:bg-gray-100 transition-all cursor-pointer"
+                    >
+                      <option value="all">All Status</option>
+                      <option value="new">New</option>
+                      <option value="booked">Booked</option>
+                      <option value="cancelled">Cancelled</option>
+                    </select>
+                    <select 
+                      value={leadDateFilter}
+                      onChange={(e) => setLeadDateFilter(e.target.value)}
+                      className="bg-gray-50 rounded-xl py-2 px-4 font-bold text-[10px] uppercase tracking-widest outline-none hover:bg-gray-100 transition-all cursor-pointer"
+                    >
+                      <option value="all">All Time</option>
+                      <option value="today">Today</option>
+                      <option value="week">Last 7 Days</option>
+                      <option value="month">Last 30 Days</option>
+                      <option value="custom">Custom Range</option>
+                    </select>
+                    <select 
+                      value={leadTypeFilter}
+                      onChange={(e) => setLeadTypeFilter(e.target.value)}
+                      className="bg-gray-50 rounded-xl py-2 px-4 font-bold text-[10px] uppercase tracking-widest outline-none hover:bg-gray-100 transition-all cursor-pointer"
+                    >
+                      <option value="all">All Trips</option>
+                      <option value="One Way">One Way</option>
+                      <option value="Round Trip">Round Trip</option>
+                      <option value="Local Rental">Rentals</option>
+                      <option value="Event Cabs">Events</option>
+                    </select>
+                    <select 
+                      value={leadVehicleFilter}
+                      onChange={(e) => setLeadTypeVehicleFilter(e.target.value)}
+                      className="bg-gray-50 rounded-xl py-2 px-4 font-bold text-[10px] uppercase tracking-widest outline-none hover:bg-gray-100 transition-all cursor-pointer"
+                    >
+                      <option value="all">All Vehicles</option>
+                      <option value="Sedan">Sedan</option>
+                      <option value="SUV">SUV (Ertiga)</option>
+                    </select>
+                  </div>
+                </div>
+
+                {leadDateFilter === 'custom' && (
+                  <motion.div 
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    className="flex flex-wrap gap-4 pt-4 border-t border-gray-50"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">From:</span>
+                      <input 
+                        type="date" 
+                        value={leadStartDate}
+                        onChange={(e) => setLeadStartDate(e.target.value)}
+                        className="bg-gray-50 rounded-xl px-4 py-2 font-bold text-xs outline-none focus:bg-white border border-gray-100"
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">To:</span>
+                      <input 
+                        type="date" 
+                        value={leadEndDate}
+                        onChange={(e) => setLeadEndDate(e.target.value)}
+                        className="bg-gray-50 rounded-xl px-4 py-2 font-bold text-xs outline-none focus:bg-white border border-gray-100"
+                      />
+                    </div>
+                    <button 
+                      onClick={() => { setLeadStartDate(''); setLeadEndDate(''); }}
+                      className="text-[10px] font-black text-red-500 uppercase tracking-widest hover:underline"
+                    >
+                      Clear Dates
+                    </button>
+                  </motion.div>
+                )}
+              </div>
+
               {/* Stats Bento */}
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
                 {[
@@ -1196,7 +1741,7 @@ const Admin: React.FC = () => {
                         }}
                         className="bg-white/10 border border-white/20 text-white rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-widest outline-none cursor-pointer hover:bg-white/20 transition-all appearance-none"
                       >
-                        <option value="">Bulk Update Status...</option>
+                        <option value="">Bulk Update Status</option>
                         <option value="new">New</option>
                         <option value="contacted">Contacted</option>
                         <option value="booked">Booked</option>
@@ -1215,16 +1760,16 @@ const Admin: React.FC = () => {
 
               {/* Leads List */}
               <div className="space-y-4">
-                {leads.length === 0 ? (
+                {filteredLeads.length === 0 ? (
                   <div className="bg-white rounded-[3rem] p-20 text-center border border-dashed border-gray-200">
                     <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-6 text-gray-300">
                       <Search size={32} />
                     </div>
-                    <h3 className="text-xl font-black text-gray-900">No Inquiries Yet</h3>
-                    <p className="text-gray-400 font-medium mt-2">New leads will appear here automatically.</p>
+                    <h3 className="text-xl font-black text-gray-900">No Inquiries Found</h3>
+                    <p className="text-gray-400 font-medium mt-2">Try adjusting your search or filters.</p>
                   </div>
                 ) : (
-                  leads.map((lead, i) => (
+                  filteredLeads.map((lead, i) => (
                     <motion.div 
                       initial={{ opacity: 0, x: -20 }}
                       animate={{ opacity: 1, x: 0 }}
@@ -1294,6 +1839,23 @@ const Admin: React.FC = () => {
                           </div>
                           
                           <div className="flex gap-2">
+                            <button 
+                              onClick={() => {
+                                setEditingLead(lead);
+                                setIsEditLeadModalOpen(true);
+                              }}
+                              className="w-12 h-12 bg-gray-50 text-gray-400 rounded-xl flex items-center justify-center hover:bg-black hover:text-[#A3E635] transition-all"
+                              title="Edit"
+                            >
+                              <Edit2 size={18} />
+                            </button>
+                            <button 
+                              onClick={() => handleDeleteLead(lead.id)}
+                              className="w-12 h-12 bg-red-50 text-red-400 rounded-xl flex items-center justify-center hover:bg-red-500 hover:text-white transition-all"
+                              title="Delete"
+                            >
+                              <Trash2 size={18} />
+                            </button>
                             <select 
                               value={lead.status}
                               onChange={(e) => updateLeadStatus(lead.id, e.target.value)}
@@ -1329,137 +1891,385 @@ const Admin: React.FC = () => {
           )}
 
           {activeTab === 'routes' && (
-            <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
-              <div className="p-6 border-b border-gray-100">
-                <h3 className="text-xl font-black text-gray-900 tracking-tight">Route Pricing Management</h3>
-                <p className="text-gray-400 text-sm mt-1">Manage intercity travel fares and pricing</p>
+            <div className="space-y-6">
+              {/* Filter Bar */}
+              <div className="bg-white p-6 rounded-[2.5rem] border border-gray-100 shadow-sm space-y-4">
+                <div className="flex flex-col md:flex-row gap-4">
+                  <div className="flex-grow relative">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                    <input 
+                      type="text" 
+                      placeholder="Search destination"
+                      value={routeSearch}
+                      onChange={(e) => setRouteSearch(e.target.value)}
+                      className="w-full bg-gray-50 rounded-2xl py-3 pl-12 pr-4 font-bold text-sm outline-none focus:ring-2 focus:ring-[#A3E635]/20 focus:bg-white transition-all"
+                    />
+                  </div>
+                  <div className="flex flex-wrap gap-3">
+                    <select 
+                      value={routeOriginFilter}
+                      onChange={(e) => setRouteOriginFilter(e.target.value)}
+                      className="bg-gray-50 rounded-xl py-2 px-4 font-bold text-[10px] uppercase tracking-widest outline-none hover:bg-gray-100 transition-all cursor-pointer"
+                    >
+                      <option value="all">Any Origin</option>
+                      {Array.from(new Set(routes.map(r => r.from))).filter(Boolean).map(city => (
+                        <option key={city} value={city}>{city}</option>
+                      ))}
+                    </select>
+                    <select 
+                      value={routeDestFilter}
+                      onChange={(e) => setRouteDestFilter(e.target.value)}
+                      className="bg-gray-50 rounded-xl py-2 px-4 font-bold text-[10px] uppercase tracking-widest outline-none hover:bg-gray-100 transition-all cursor-pointer"
+                    >
+                      <option value="all">Any Destination</option>
+                      {Array.from(new Set(routes.map(r => r.destination))).filter(Boolean).map(city => (
+                        <option key={city} value={city}>{city}</option>
+                      ))}
+                    </select>
+                    <div className="relative group">
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-gray-400 uppercase tracking-widest">Max ₹</span>
+                      <input 
+                        type="number" 
+                        placeholder="Price"
+                        value={routePriceMax}
+                        onChange={(e) => setRoutePriceMax(e.target.value)}
+                        className="w-32 bg-gray-50 rounded-xl py-2 pl-16 pr-4 font-bold text-sm outline-none hover:bg-gray-100 transition-all"
+                      />
+                    </div>
+                  </div>
+                </div>
               </div>
-              
-              <div className="divide-y divide-gray-100">
-                {routes.map((route, i) => (
-                  <motion.div 
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: i * 0.05 }}
-                    key={route.id} 
-                    className="p-6 hover:bg-gray-50/50 transition-all group"
-                  >
-                    <div className="flex flex-col md:flex-row md:items-center gap-4">
-                      {/* Route Info */}
-                      <div className="flex-1 min-w-[200px]">
-                        <div className="flex items-center gap-3 mb-1">
-                          <div className="w-10 h-10 bg-[#A3E635] rounded-xl flex items-center justify-center text-black">
-                            <MapPin size={18} />
+
+              <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
+                <div className="p-6 border-b border-gray-100">
+                  <h3 className="text-xl font-black text-gray-900 tracking-tight">Route Pricing Management</h3>
+                  <p className="text-gray-400 text-sm mt-1">Manage intercity travel fares and pricing</p>
+                </div>
+                
+                <div className="divide-y divide-gray-100">
+                  {filteredRoutes.map((route, i) => (
+                    <motion.div 
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: i * 0.05 }}
+                      key={route.id} 
+                      className="p-6 hover:bg-gray-50/50 transition-all group"
+                    >
+                      <div className="flex flex-col md:flex-row md:items-center gap-4">
+                        {/* Route Info */}
+                        <div className="flex-1 min-w-[200px]">
+                          <div className="flex items-center gap-3 mb-1">
+                            <div className="w-10 h-10 bg-[#A3E635] rounded-xl flex items-center justify-center text-black">
+                              <MapPin size={18} />
+                            </div>
+                            <h4 className="text-lg font-black text-gray-900 tracking-tight">
+                              {route.from || 'Bokaro'} <span className="text-gray-300 mx-2">→</span> {route.destination}
+                            </h4>
                           </div>
-                          <h4 className="text-lg font-black text-gray-900 tracking-tight">
-                            {route.from || 'Bokaro'} <span className="text-gray-300 mx-2">→</span> {route.destination}
-                          </h4>
+                          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-13">{route.distance} • {route.time}</p>
                         </div>
-                        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-13">{route.distance} • {route.time}</p>
+                        
+                        {/* Pricing Cards */}
+                        <div className="flex gap-3">
+                          <div className="bg-gray-50 rounded-xl p-4 min-w-[120px] text-center">
+                            <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">Sedan</span>
+                            <span className="text-xl font-black text-gray-900">₹{route.sedan}</span>
+                          </div>
+                          <div className="bg-gray-50 rounded-xl p-4 min-w-[120px] text-center">
+                            <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">SUV</span>
+                            <span className="text-xl font-black text-gray-900">₹{route.ertiga}</span>
+                          </div>
+                        </div>
+                        
+                        {/* Actions */}
+                        <div className="flex gap-2 justify-end md:justify-start">
+                          <button 
+                            onClick={() => {
+                              setEditingRoute(route);
+                              setIsRouteModalOpen(true);
+                            }}
+                            className="w-10 h-10 bg-gray-50 text-gray-400 rounded-xl flex items-center justify-center hover:bg-black hover:text-[#A3E635] transition-all"
+                            title="Edit Route"
+                          >
+                            <Edit2 size={16} />
+                          </button>
+                          <button 
+                            onClick={() => handleDeleteRoute(route.id)}
+                            className="w-10 h-10 bg-red-50 text-red-400 rounded-xl flex items-center justify-center hover:bg-red-500 hover:text-white transition-all"
+                            title="Delete Route"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
                       </div>
-                      
-                      {/* Pricing Cards */}
-                      <div className="flex gap-3">
-                        <div className="bg-gray-50 rounded-xl p-4 min-w-[120px] text-center">
-                          <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">Sedan</span>
-                          <span className="text-xl font-black text-gray-900">₹{route.sedan}</span>
+                    </motion.div>
+                  ))}
+                </div>
+                
+                {filteredRoutes.length === 0 && (
+                  <div className="p-16 text-center">
+                    <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4 text-gray-300">
+                      <MapPin size={24} />
+                    </div>
+                    <h4 className="text-lg font-black text-gray-900 mb-2">No Routes Found</h4>
+                    <p className="text-gray-400 text-sm">Add a new route or adjust your search.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'roundtrips' && (
+            <div className="space-y-6">
+              {/* Filter Bar */}
+              <div className="bg-white p-6 rounded-[2.5rem] border border-gray-100 shadow-sm space-y-4">
+                <div className="flex flex-col md:flex-row gap-4">
+                  <div className="flex-grow relative">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                    <input 
+                      type="text" 
+                      placeholder="Search destination..."
+                      value={roundtripSearch}
+                      onChange={(e) => setRoundtripSearch(e.target.value)}
+                      className="w-full bg-gray-50 rounded-2xl py-3 pl-12 pr-4 font-bold text-sm outline-none focus:ring-2 focus:ring-[#A3E635]/20 focus:bg-white transition-all"
+                    />
+                  </div>
+                  <div className="flex flex-wrap gap-3">
+                    <select 
+                      value={roundtripOriginFilter}
+                      onChange={(e) => setRoundtripOriginFilter(e.target.value)}
+                      className="bg-gray-50 rounded-xl py-2 px-4 font-bold text-[10px] uppercase tracking-widest outline-none hover:bg-gray-100 transition-all cursor-pointer"
+                    >
+                      <option value="all">Any Origin</option>
+                      {Array.from(new Set(roundtrips.map(r => r.from))).filter(Boolean).map(city => (
+                        <option key={city} value={city}>{city}</option>
+                      ))}
+                    </select>
+                    <select 
+                      value={roundtripDestFilter}
+                      onChange={(e) => setRoundtripDestFilter(e.target.value)}
+                      className="bg-gray-50 rounded-xl py-2 px-4 font-bold text-[10px] uppercase tracking-widest outline-none hover:bg-gray-100 transition-all cursor-pointer"
+                    >
+                      <option value="all">Any Destination</option>
+                      {Array.from(new Set(roundtrips.map(r => r.destination))).filter(Boolean).map(city => (
+                        <option key={city} value={city}>{city}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
+                <div className="p-6 border-b border-gray-100">
+                  <h3 className="text-xl font-black text-gray-900 tracking-tight">Roundtrip Pricing</h3>
+                  <p className="text-gray-400 text-sm mt-1">Manage roundtrip fares including waiting time</p>
+                </div>
+                
+                <div className="divide-y divide-gray-100">
+                  {filteredRoundtrips.map((trip, i) => (
+                    <motion.div 
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: i * 0.05 }}
+                      key={trip.id} 
+                      className="p-6 hover:bg-gray-50/50 transition-all group"
+                    >
+                      <div className="flex flex-col md:flex-row md:items-center gap-4">
+                        <div className="flex-1 min-w-[200px]">
+                          <div className="flex items-center gap-3 mb-1">
+                            <div className="w-10 h-10 bg-[#A3E635] rounded-xl flex items-center justify-center text-black">
+                              <ArrowRightLeft size={18} />
+                            </div>
+                            <h4 className="text-lg font-black text-gray-900 tracking-tight">
+                              {trip.from} <span className="text-gray-300 mx-2">↔</span> {trip.destination}
+                            </h4>
+                          </div>
+                          <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-13">{trip.distance} • {trip.time}</p>
                         </div>
-                        <div className="bg-gray-50 rounded-xl p-4 min-w-[120px] text-center">
-                          <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">SUV</span>
-                          <span className="text-xl font-black text-gray-900">₹{route.ertiga}</span>
+                        
+                        <div className="flex gap-3">
+                          <div className="bg-gray-50 rounded-xl p-4 min-w-[120px] text-center">
+                            <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">Sedan</span>
+                            <span className="text-xl font-black text-gray-900">₹{trip.sedan}</span>
+                          </div>
+                          <div className="bg-gray-50 rounded-xl p-4 min-w-[120px] text-center">
+                            <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">SUV</span>
+                            <span className="text-xl font-black text-gray-900">₹{trip.ertiga}</span>
+                          </div>
+                        </div>
+                        
+                        <div className="flex gap-2 justify-end">
+                          <button onClick={() => { setEditingRoundtrip(trip); setIsRoundtripModalOpen(true); }} className="w-10 h-10 bg-gray-50 text-gray-400 rounded-xl flex items-center justify-center hover:bg-black hover:text-[#A3E635] transition-all"><Edit2 size={16} /></button>
+                          <button onClick={() => handleDeleteRoundtrip(trip.id)} className="w-10 h-10 bg-red-50 text-red-400 rounded-xl flex items-center justify-center hover:bg-red-500 hover:text-white transition-all"><Trash2 size={16} /></button>
                         </div>
                       </div>
-                      
-                      {/* Actions */}
-                      <div className="flex gap-2 justify-end md:justify-start">
-                        <button 
-                          onClick={() => {
-                            setEditingRoute(route);
-                            setIsRouteModalOpen(true);
-                          }}
-                          className="w-10 h-10 bg-gray-50 text-gray-400 rounded-xl flex items-center justify-center hover:bg-black hover:text-[#A3E635] transition-all"
-                          title="Edit Route"
-                        >
-                          <Edit2 size={16} />
-                        </button>
-                        <button 
-                          onClick={() => handleDeleteRoute(route.id)}
-                          className="w-10 h-10 bg-red-50 text-red-400 rounded-xl flex items-center justify-center hover:bg-red-500 hover:text-white transition-all"
-                          title="Delete Route"
-                        >
-                          <Trash2 size={16} />
-                        </button>
+                    </motion.div>
+                  ))}
+                </div>
+                {filteredRoundtrips.length === 0 && <div className="p-16 text-center text-gray-400">No roundtrip data found.</div>}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'events' && (
+            <div className="space-y-6">
+              {/* Filter Bar */}
+              <div className="bg-white p-6 rounded-[2.5rem] border border-gray-100 shadow-sm relative">
+                <Search className="absolute left-8 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                <input 
+                  type="text" 
+                  placeholder="Search events"
+                  value={eventSearch}
+                  onChange={(e) => setEventSearch(e.target.value)}
+                  className="w-full bg-gray-50 rounded-2xl py-3 pl-14 pr-4 font-bold text-sm outline-none focus:ring-2 focus:ring-[#A3E635]/20 focus:bg-white transition-all"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {filteredEvents.map((event, i) => (
+                  <motion.div 
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: i * 0.05 }}
+                    key={event.id} 
+                    className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm hover:shadow-xl transition-all group relative overflow-hidden"
+                  >
+                    <div className="relative z-10">
+                      <div className="flex justify-between items-start mb-6">
+                        <div className="w-14 h-14 bg-[#A3E635]/10 rounded-2xl flex items-center justify-center text-[#A3E635]">
+                          <ImageIcon size={24} />
+                        </div>
+                        <div className="flex gap-2">
+                          <button onClick={() => { setEditingEvent(event); setIsEventModalOpen(true); }} className="w-10 h-10 bg-gray-50 text-gray-400 rounded-xl flex items-center justify-center hover:bg-black hover:text-[#A3E635] transition-all"><Edit2 size={16} /></button>
+                          <button onClick={() => handleDeleteEvent(event.id)} className="w-10 h-10 bg-red-50 text-red-400 rounded-xl flex items-center justify-center hover:bg-red-500 hover:text-white transition-all"><Trash2 size={16} /></button>
+                        </div>
+                      </div>
+                      <h3 className="text-2xl font-black text-gray-900 tracking-tight mb-2">{event.name}</h3>
+                      <p className="text-gray-400 text-sm font-medium mb-6 line-clamp-2">{event.description}</p>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="bg-gray-50 rounded-xl p-4">
+                          <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">Sedan Base</span>
+                          <span className="text-xl font-black text-gray-900">₹{event.base_price_sedan}</span>
+                        </div>
+                        <div className="bg-gray-50 rounded-xl p-4">
+                          <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">SUV Base</span>
+                          <span className="text-xl font-black text-gray-900">₹{event.base_price_suv}</span>
+                        </div>
                       </div>
                     </div>
                   </motion.div>
                 ))}
               </div>
-              
-              {routes.length === 0 && (
-                <div className="p-16 text-center">
-                  <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4 text-gray-300">
-                    <MapPin size={24} />
-                  </div>
-                  <h4 className="text-lg font-black text-gray-900 mb-2">No Routes Found</h4>
-                  <p className="text-gray-400 text-sm">Add your first route to get started with pricing management.</p>
-                </div>
-              )}
+              {filteredEvents.length === 0 && <div className="p-16 text-center text-gray-400">No events found.</div>}
             </div>
           )}
 
           {activeTab === 'rentals' && (
             <div className="space-y-6">
+              {/* Filter Bar */}
+              <div className="bg-white p-6 rounded-[2.5rem] border border-gray-100 shadow-sm space-y-4">
+                <div className="flex flex-col md:flex-row gap-4">
+                  <div className="flex-grow relative">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                    <input
+                      type="text"
+                      placeholder="Search city..."
+                      value={rentalSearch}
+                      onChange={(e) => setRentalSearch(e.target.value)}
+                      className="w-full bg-gray-50 rounded-2xl py-3 pl-12 pr-4 font-bold text-sm outline-none focus:ring-2 focus:ring-[#A3E635]/20 focus:bg-white transition-all"
+                    />
+                  </div>
+                  <div className="flex gap-3">
+                    <select 
+                      value={rentalCityFilter}
+                      onChange={(e) => setRentalCityFilter(e.target.value)}
+                      className="bg-gray-50 rounded-xl py-2 px-4 font-bold text-[10px] uppercase tracking-widest outline-none hover:bg-gray-100 transition-all cursor-pointer"
+                    >
+                      <option value="all">Any City</option>
+                      {Array.from(new Set(rentals.map(r => r.city))).filter(Boolean).map(city => (
+                        <option key={city} value={city}>{city}</option>
+                      ))}
+                    </select>
+                    <button 
+                      onClick={() => {
+                        setEditingRental({ city: '', hr: '', km: '', rate: 0 });
+                        setIsRentalModalOpen(true);
+                      }}
+                      className="bg-black text-[#A3E635] px-6 py-2 rounded-xl font-black uppercase tracking-widest text-[10px] flex items-center justify-center gap-2 shadow-xl hover:scale-105 transition-all"
+                    >
+                      <Plus size={14} />
+                      New City
+                    </button>
+                  </div>
+                </div>
+              </div>
+
               {Object.entries(
-                rentals.reduce((acc, rental) => {
+                filteredRentals.reduce((acc, rental) => {
                   if (!acc[rental.city]) acc[rental.city] = [];
                   acc[rental.city].push(rental);
                   return acc;
                 }, {} as Record<string, RentalPrice[]>)
               ).map(([city, cityRentals], i) => (
-                <div key={city} className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
-                  <div className="p-6 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center">
-                    <div>
-                      <h3 className="text-xl font-black text-gray-900 tracking-tight">{city}</h3>
-                      <p className="text-gray-400 text-xs font-bold uppercase tracking-widest mt-0.5">{cityRentals.length} Packages Available</p>
+                <div key={city} className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden group/city">
+                  <div className="p-8 border-b border-gray-100 bg-gray-50/50 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                    <div className="flex items-center gap-4">
+                      <div className="w-14 h-14 bg-white rounded-2xl border-2 border-[#A3E635] flex items-center justify-center text-black font-black text-xl shadow-sm">
+                        {city.charAt(0)}
+                      </div>
+                      <div>
+                        <h3 className="text-2xl font-black text-gray-900 tracking-tight">{city}</h3>
+                        <p className="text-gray-400 text-[10px] font-black uppercase tracking-[0.2em] mt-1">{cityRentals.length} ACTIVE PACKAGES</p>
+                      </div>
                     </div>
-                    <button 
+                    <button
                       onClick={() => {
                         setEditingRental({ city, hr: '', km: '', rate: 0 });
                         setIsRentalModalOpen(true);
                       }}
-                      className="text-[10px] font-black uppercase tracking-widest bg-black text-[#A3E635] px-4 py-2 rounded-xl hover:scale-105 transition-all"
+                      className="bg-black text-white hover:bg-[#A3E635] hover:text-black px-6 py-3 rounded-xl font-black uppercase tracking-widest text-[10px] flex items-center gap-2 transition-all shadow-lg"
                     >
-                      Add Package
+                      <Plus size={14} /> Add Package
                     </button>
                   </div>
-                  
+
                   <div className="divide-y divide-gray-100">
                     {cityRentals.map((rental, j) => (
-                      <div key={rental.id} className="p-6 hover:bg-gray-50/30 transition-all flex items-center justify-between">
-                        <div className="flex items-center gap-4">
-                          <div className="w-10 h-10 bg-gray-100 rounded-xl flex items-center justify-center text-gray-400">
+                      <div key={rental.id} className="p-6 md:px-8 hover:bg-gray-50/80 transition-all flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                        <div className="flex items-center gap-6">
+                          <div className="w-10 h-10 bg-white border border-gray-100 rounded-xl flex items-center justify-center text-gray-400">
                             <Clock size={18} />
                           </div>
-                          <div>
-                            <p className="font-black text-gray-900 tracking-tight">{rental.hr} / {rental.km}</p>
-                            <p className="text-[10px] font-black text-[#A3E635] uppercase tracking-widest">Rate: ₹{rental.rate}</p>
+                          <div className="grid grid-cols-2 md:flex md:items-center gap-4 md:gap-12">
+                            <div>
+                              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">DURATION</p>
+                              <p className="font-black text-gray-900">{rental.hr}</p>
+                            </div>
+                            <div>
+                              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">DISTANCE</p>
+                              <p className="font-black text-gray-900">{rental.km}</p>
+                            </div>
+                            <div className="bg-[#A3E635]/10 px-4 py-2 rounded-xl">
+                              <p className="text-[10px] font-black text-lime-700 uppercase tracking-widest mb-0.5">RATE</p>
+                              <p className="font-black text-gray-900">₹{rental.rate}</p>
+                            </div>
                           </div>
                         </div>
-                        <div className="flex gap-2">
-                          <button 
+                        <div className="flex gap-2 w-full md:w-auto">
+                          <button
                             onClick={() => {
                               setEditingRental(rental);
                               setIsRentalModalOpen(true);
                             }}
-                            className="w-9 h-9 bg-gray-50 text-gray-400 rounded-lg flex items-center justify-center hover:bg-black hover:text-[#A3E635] transition-all"
+                            className="flex-1 md:flex-none h-10 px-4 bg-gray-50 text-gray-400 rounded-xl flex items-center justify-center hover:bg-black hover:text-[#A3E635] transition-all"
                           >
-                            <Edit2 size={14} />
+                            <Edit2 size={16} />
                           </button>
-                          <button 
+                          <button
                             onClick={() => handleDeleteRental(rental.id)}
-                            className="w-9 h-9 bg-red-50 text-red-400 rounded-lg flex items-center justify-center hover:bg-red-500 hover:text-white transition-all"
+                            className="flex-1 md:flex-none h-10 px-4 bg-red-50 text-red-400 rounded-xl flex items-center justify-center hover:bg-red-500 hover:text-white transition-all"
                           >
-                            <Trash2 size={14} />
+                            <Trash2 size={16} />
                           </button>
                         </div>
                       </div>
@@ -1468,28 +2278,55 @@ const Admin: React.FC = () => {
                 </div>
               ))}
 
-              {rentals.length === 0 && (
-                <div className="bg-white rounded-[2.5rem] p-16 text-center border border-gray-100">
-                  <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4 text-gray-300">
-                    <Clock size={24} />
+              {filteredRentals.length === 0 && (
+                <div className="bg-white rounded-[2.5rem] p-20 text-center border border-dashed border-gray-200">
+                  <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-6 text-gray-300">
+                    <MapPin size={32} />
                   </div>
-                  <h4 className="text-lg font-black text-gray-900 mb-2">No Rentals Found</h4>
-                  <p className="text-gray-400 text-sm">Add your first city and rental rate to get started.</p>
+                  <h4 className="text-xl font-black text-gray-900">No Rental Cities Found</h4>
+                  <p className="text-gray-400 font-medium mt-2">Start by adding your first city and its rental packages.</p>
                 </div>
               )}
             </div>
           )}
-
           {activeTab === 'cars' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {cars.map((car, i) => (
-                <motion.div 
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ delay: i * 0.05 }}
-                  key={car.id} 
-                  className="bg-white rounded-[2.5rem] p-8 border border-gray-100 shadow-sm hover:shadow-xl transition-all group"
-                >
+            <div className="space-y-6">
+              {/* Filter Bar */}
+              <div className="bg-white p-6 rounded-[2.5rem] border border-gray-100 shadow-sm space-y-4">
+                <div className="flex flex-col md:flex-row gap-4">
+                  <div className="flex-grow relative">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                    <input 
+                      type="text" 
+                      placeholder="Search by car name or models"
+                      value={carSearch}
+                      onChange={(e) => setCarSearch(e.target.value)}
+                      className="w-full bg-gray-50 rounded-2xl py-3 pl-12 pr-4 font-bold text-sm outline-none focus:ring-2 focus:ring-[#A3E635]/20 focus:bg-white transition-all"
+                    />
+                  </div>
+                  <div className="md:w-48">
+                    <select 
+                      value={carTypeFilter}
+                      onChange={(e) => setCarTypeFilter(e.target.value)}
+                      className="w-full bg-gray-50 rounded-xl py-3 px-4 font-bold text-[10px] uppercase tracking-widest outline-none hover:bg-gray-100 transition-all cursor-pointer"
+                    >
+                      <option value="all">All Types</option>
+                      <option value="Sedan">Sedan</option>
+                      <option value="SUV">SUV (Ertiga)</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {filteredCars.map((car, i) => (
+                  <motion.div 
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    transition={{ delay: i * 0.05 }}
+                    key={car.id} 
+                    className="bg-white rounded-[2.5rem] p-8 border border-gray-100 shadow-sm hover:shadow-xl transition-all group"
+                  >
                   <div className="flex justify-between items-start mb-6">
                     <div className="w-14 h-14 bg-gray-50 rounded-2xl flex items-center justify-center text-gray-400 group-hover:bg-black group-hover:text-[#A3E635] transition-all duration-500">
                       <CarIcon size={24} />
@@ -1529,11 +2366,39 @@ const Admin: React.FC = () => {
                 </motion.div>
               ))}
             </div>
-          )}
+          </div>
+        )}
 
-          {activeTab === 'tours' && (
+        {activeTab === 'tours' && (
+          <div className="space-y-6">
+            {/* Filter Bar */}
+            <div className="bg-white p-6 rounded-[2.5rem] border border-gray-100 shadow-sm space-y-4">
+              <div className="flex flex-col md:flex-row gap-4">
+                <div className="flex-grow relative">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                  <input 
+                    type="text" 
+                    placeholder="Search tours"
+                    value={tourSearch}
+                    onChange={(e) => setTourSearch(e.target.value)}
+                    className="w-full bg-gray-50 rounded-2xl py-3 pl-12 pr-4 font-bold text-sm outline-none focus:ring-2 focus:ring-[#A3E635]/20 focus:bg-white transition-all"
+                  />
+                </div>
+                <div className="relative group md:w-48">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-gray-400 uppercase tracking-widest">Max ₹</span>
+                  <input 
+                    type="number" 
+                    placeholder="Price"
+                    value={tourPriceMax}
+                    onChange={(e) => setTourPriceMax(e.target.value)}
+                    className="w-full bg-gray-50 rounded-xl py-3 pl-16 pr-4 font-bold text-sm outline-none hover:bg-gray-100 transition-all"
+                  />
+                </div>
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {tourPackages.map((pkg, i) => (
+              {filteredTours.map((pkg, i) => (
                 <motion.div 
                   initial={{ opacity: 0, scale: 0.95 }}
                   animate={{ opacity: 1, scale: 1 }}
@@ -1541,48 +2406,49 @@ const Admin: React.FC = () => {
                   key={pkg.id} 
                   className="bg-white rounded-[2.5rem] overflow-hidden border border-gray-100 shadow-sm hover:shadow-xl transition-all group"
                 >
-                  <div className="relative h-48 bg-gray-100">
-                    {pkg.image_url ? (
-                      <img src={pkg.image_url} alt={pkg.title} className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-gray-300">
-                        <ImageIcon size={48} />
-                      </div>
-                    )}
-                    <div className="absolute top-4 right-4 flex gap-2">
-                      <button 
-                        onClick={() => {
-                          setEditingTour(pkg);
-                          setLocationPricing(pkg.location_pricing || []);
-                          setIsTourModalOpen(true);
-                        }}
-                        className="w-10 h-10 bg-white/90 backdrop-blur-sm text-gray-900 rounded-xl flex items-center justify-center hover:bg-black hover:text-[#A3E635] transition-all shadow-lg"
-                      >
-                        <Edit2 size={16} />
-                      </button>
-                      <button 
-                        onClick={() => handleDeleteTour(pkg.id)}
-                        className="w-10 h-10 bg-red-500 text-white rounded-xl flex items-center justify-center hover:bg-red-600 transition-all shadow-lg"
-                      >
-                        <Trash2 size={16} />
-                      </button>
+                <div className="relative h-48 bg-gray-100">
+                  {pkg.image_url ? (
+                    <img src={pkg.image_url} alt={pkg.title} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-gray-300">
+                      <ImageIcon size={48} />
                     </div>
+                  )}
+                  <div className="absolute top-4 right-4 flex gap-2">
+                    <button 
+                      onClick={() => {
+                        setEditingTour(pkg);
+                        setLocationPricing(pkg.location_pricing || []);
+                        setIsTourModalOpen(true);
+                      }}
+                      className="w-10 h-10 bg-white/90 backdrop-blur-sm text-gray-900 rounded-xl flex items-center justify-center hover:bg-black hover:text-[#A3E635] transition-all shadow-lg"
+                    >
+                      <Edit2 size={16} />
+                    </button>
+                    <button 
+                      onClick={() => handleDeleteTour(pkg.id)}
+                      className="w-10 h-10 bg-red-500 text-white rounded-xl flex items-center justify-center hover:bg-red-600 transition-all shadow-lg"
+                    >
+                      <Trash2 size={16} />
+                    </button>
                   </div>
-                  <div className="p-8">
-                    <div className="flex justify-between items-start mb-2">
-                      <h3 className="text-xl font-black text-gray-900 tracking-tight">{pkg.title}</h3>
-                      <span className="text-[#A3E635] font-black">₹{pkg.price}</span>
-                    </div>
-                    <p className="text-gray-400 text-sm line-clamp-2 mb-4">{pkg.description}</p>
-                    <div className="flex items-center gap-2 text-gray-500">
-                      <Clock size={14} />
-                      <span className="text-xs font-bold uppercase tracking-widest">{pkg.duration}</span>
-                    </div>
+                </div>
+                <div className="p-8">
+                  <div className="flex justify-between items-start mb-2">
+                    <h3 className="text-xl font-black text-gray-900 tracking-tight">{pkg.title}</h3>
+                    <span className="text-[#A3E635] font-black">₹{pkg.price}</span>
                   </div>
-                </motion.div>
-              ))}
-            </div>
-          )}
+                  <p className="text-gray-400 text-sm line-clamp-2 mb-4">{pkg.description}</p>
+                  <div className="flex items-center gap-2 text-gray-500">
+                    <Clock size={14} />
+                    <span className="text-xs font-bold uppercase tracking-widest">{pkg.duration}</span>
+                  </div>
+                </div>
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      )}
         </div>
       </main>
 
@@ -1779,6 +2645,129 @@ const Admin: React.FC = () => {
           )}
         </div>
       </Modal>
+      {/* Edit Inquiry Modal */}
+      <Modal 
+        isOpen={isEditLeadModalOpen} 
+        onClose={() => setIsEditLeadModalOpen(false)} 
+        title="Edit Booking Inquiry"
+        maxWidth="max-w-2xl"
+      >
+        {editingLead && (
+          <form onSubmit={handleUpdateLead} className="space-y-6">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Customer Name</label>
+                <input required type="text" value={editingLead.name} onChange={(e) => setEditingLead(prev => prev ? ({ ...prev, name: e.target.value }) : null)} className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-bold text-gray-900 outline-none focus:border-black transition-all" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Phone</label>
+                <input required type="tel" value={editingLead.phone} onChange={(e) => setEditingLead(prev => prev ? ({ ...prev, phone: e.target.value }) : null)} className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-bold text-gray-900 outline-none focus:border-black transition-all" />
+              </div>
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Pickup Address</label>
+              <textarea required rows={2} value={editingLead.address} onChange={(e) => setEditingLead(prev => prev ? ({ ...prev, address: e.target.value }) : null)} className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-medium text-gray-900 outline-none focus:border-black transition-all resize-none" />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Vehicle Type</label>
+                <select value={editingLead.vehicleType} onChange={(e) => setEditingLead(prev => prev ? ({ ...prev, vehicleType: e.target.value }) : null)} className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-bold text-gray-900 outline-none focus:border-black transition-all cursor-pointer">
+                  <option value="Sedan">Sedan</option>
+                  <option value="SUV">SUV (Ertiga)</option>
+                </select>
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Status</label>
+                <select value={editingLead.status} onChange={(e) => setEditingLead(prev => prev ? ({ ...prev, status: e.target.value }) : null)} className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-bold text-gray-900 outline-none focus:border-black transition-all cursor-pointer">
+                  <option value="new">New</option>
+                  <option value="contacted">Contacted</option>
+                  <option value="booked">Booked</option>
+                  <option value="cancelled">Cancelled</option>
+                </select>
+              </div>
+            </div>
+            <button type="submit" className="w-full py-5 bg-black text-[#A3E635] rounded-2xl font-black uppercase tracking-widest shadow-xl hover:scale-[1.02] transition-all">
+              Update Inquiry Details
+            </button>
+          </form>
+        )}
+      </Modal>
+
+      {/* Roundtrip Modal */}
+      <Modal 
+        isOpen={isRoundtripModalOpen} 
+        onClose={() => setIsRoundtripModalOpen(false)} 
+        title={editingRoundtrip?.id ? 'Edit Roundtrip' : 'New Roundtrip'}
+        maxWidth="max-w-2xl"
+      >
+        <form onSubmit={handleSaveRoundtrip} className="space-y-6">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">From</label>
+              <input required type="text" value={editingRoundtrip?.from || ''} onChange={(e) => setEditingRoundtrip(prev => ({ ...prev, from: e.target.value }))} className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-bold text-gray-900 outline-none focus:border-black transition-all" />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">To</label>
+              <input required type="text" value={editingRoundtrip?.destination || ''} onChange={(e) => setEditingRoundtrip(prev => ({ ...prev, destination: e.target.value }))} className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-bold text-gray-900 outline-none focus:border-black transition-all" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Distance</label>
+              <input required type="text" value={editingRoundtrip?.distance || ''} onChange={(e) => setEditingRoundtrip(prev => ({ ...prev, distance: e.target.value }))} className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-bold text-gray-900 outline-none focus:border-black transition-all" />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Time</label>
+              <input required type="text" value={editingRoundtrip?.time || ''} onChange={(e) => setEditingRoundtrip(prev => ({ ...prev, time: e.target.value }))} className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-bold text-gray-900 outline-none focus:border-black transition-all" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Sedan Price</label>
+              <input required type="number" value={editingRoundtrip?.sedan || ''} onChange={(e) => setEditingRoundtrip(prev => ({ ...prev, sedan: Number(e.target.value) }))} className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-bold text-gray-900 outline-none focus:border-black transition-all" />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">SUV Price</label>
+              <input required type="number" value={editingRoundtrip?.ertiga || ''} onChange={(e) => setEditingRoundtrip(prev => ({ ...prev, ertiga: Number(e.target.value) }))} className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-bold text-gray-900 outline-none focus:border-black transition-all" />
+            </div>
+          </div>
+          <button type="submit" className="w-full py-5 bg-black text-[#A3E635] rounded-2xl font-black uppercase tracking-widest shadow-xl hover:scale-[1.02] transition-all">
+            {editingRoundtrip?.id ? 'Update Roundtrip' : 'Create Roundtrip'}
+          </button>
+        </form>
+      </Modal>
+
+      {/* Event Modal */}
+      <Modal 
+        isOpen={isEventModalOpen} 
+        onClose={() => setIsEventModalOpen(false)} 
+        title={editingEvent?.id ? 'Edit Event Package' : 'New Event Package'}
+      >
+        <form onSubmit={handleSaveEvent} className="space-y-6">
+          <div className="space-y-1">
+            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Event Name</label>
+            <input required type="text" value={editingEvent?.name || ''} onChange={(e) => setEditingEvent(prev => ({ ...prev, name: e.target.value }))} placeholder="e.g. Wedding" className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-bold text-gray-900 outline-none focus:border-black transition-all" />
+          </div>
+          <div className="space-y-1">
+            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Description</label>
+            <textarea required rows={3} value={editingEvent?.description || ''} onChange={(e) => setEditingEvent(prev => ({ ...prev, description: e.target.value }))} className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-medium text-gray-900 outline-none focus:border-black transition-all resize-none" />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Sedan Base (₹)</label>
+              <input required type="number" value={editingEvent?.base_price_sedan || ''} onChange={(e) => setEditingEvent(prev => ({ ...prev, base_price_sedan: Number(e.target.value) }))} className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-bold text-gray-900 outline-none focus:border-black transition-all" />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">SUV Base (₹)</label>
+              <input required type="number" value={editingEvent?.base_price_suv || ''} onChange={(e) => setEditingEvent(prev => ({ ...prev, base_price_suv: Number(e.target.value) }))} className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-bold text-gray-900 outline-none focus:border-black transition-all" />
+            </div>
+          </div>
+          <button type="submit" className="w-full py-5 bg-black text-[#A3E635] rounded-2xl font-black uppercase tracking-widest shadow-xl hover:scale-[1.02] transition-all">
+            {editingEvent?.id ? 'Update Event' : 'Add Event'}
+          </button>
+        </form>
+      </Modal>
+
       {/* Rental Modal */}
       <Modal 
         isOpen={isRentalModalOpen} 
@@ -1981,7 +2970,7 @@ const Admin: React.FC = () => {
                   rows={4}
                   value={editingTour?.description || ''}
                   onChange={(e) => setEditingTour(prev => ({ ...prev, description: e.target.value }))}
-                  placeholder="Describe the tour package details..."
+                  placeholder="Describe the tour package details"
                   className="w-full bg-gray-50 border-2 border-gray-100 rounded-xl p-5 font-bold text-gray-900 outline-none focus:border-black transition-all resize-none"
                 />
               </div>
@@ -2107,7 +3096,7 @@ const Admin: React.FC = () => {
               rows={8}
               value={bulkData}
               onChange={(e) => setBulkData(e.target.value)}
-              placeholder="Enter your routes here, one per line...
+              placeholder="Enter your routes here, one per line
 Example:
 Bokaro, Kolkata, 6h 19m, 317 km, 6500, 7500
 Ranchi, Jamshedpur, 2h 30m, 130 km, 2000, 3000"
@@ -2213,7 +3202,7 @@ Dhanbad, Asansol, 1h 30m, 60 km, 1200, 1800`);
               <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Trip Type</label>
               <select 
                 value={newLead.bookingDetails.tripType}
-                onChange={(e) => setNewLead({...newLead, bookingDetails: {...newLead.bookingDetails, tripType: e.target.value}})}
+                onChange={(e) => setNewLead({...newLead, bookingDetails: { ...newLead.bookingDetails, tripType: e.target.value}})}
                 className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-bold text-gray-900 outline-none focus:border-black transition-all"
               >
                 <option value="One Way">One Way</option>
@@ -2229,7 +3218,7 @@ Dhanbad, Asansol, 1h 30m, 60 km, 1200, 1800`);
                 required
                 type="text" 
                 value={newLead.bookingDetails.from}
-                onChange={(e) => setNewLead({...newLead, bookingDetails: {...newLead.bookingDetails, from: e.target.value}})}
+                onChange={(e) => setNewLead({...newLead, bookingDetails: { ...newLead.bookingDetails, from: e.target.value}})}
                 placeholder="Origin city"
                 className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-bold text-gray-900 outline-none focus:border-black transition-all"
               />
@@ -2241,7 +3230,7 @@ Dhanbad, Asansol, 1h 30m, 60 km, 1200, 1800`);
                 required
                 type="text" 
                 value={newLead.bookingDetails.to}
-                onChange={(e) => setNewLead({...newLead, bookingDetails: {...newLead.bookingDetails, to: e.target.value}})}
+                onChange={(e) => setNewLead({...newLead, bookingDetails: { ...newLead.bookingDetails, to: e.target.value}})}
                 placeholder="Destination city"
                 className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-bold text-gray-900 outline-none focus:border-black transition-all"
               />
@@ -2253,7 +3242,7 @@ Dhanbad, Asansol, 1h 30m, 60 km, 1200, 1800`);
                 required
                 type="date" 
                 value={newLead.bookingDetails.date}
-                onChange={(e) => setNewLead({...newLead, bookingDetails: {...newLead.bookingDetails, date: e.target.value}})}
+                onChange={(e) => setNewLead({...newLead, bookingDetails: { ...newLead.bookingDetails, date: e.target.value}})}
                 min={new Date().toISOString().split('T')[0]}
                 className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-bold text-gray-900 outline-none focus:border-black transition-all"
               />
@@ -2265,7 +3254,7 @@ Dhanbad, Asansol, 1h 30m, 60 km, 1200, 1800`);
                 required
                 type="time" 
                 value={newLead.bookingDetails.time}
-                onChange={(e) => setNewLead({...newLead, bookingDetails: {...newLead.bookingDetails, time: e.target.value}})}
+                onChange={(e) => setNewLead({...newLead, bookingDetails: { ...newLead.bookingDetails, time: e.target.value}})}
                 className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-bold text-gray-900 outline-none focus:border-black transition-all"
               />
             </div>
@@ -2308,7 +3297,7 @@ Dhanbad, Asansol, 1h 30m, 60 km, 1200, 1800`);
                 required
                 type="text" 
                 value={driverDetails.name}
-                onChange={(e) => setDriverDetails({...driverDetails, name: e.target.value})}
+                onChange={(e) => setDriverDetails({ ...driverDetails, name: e.target.value})}
                 placeholder="e.g. Ramesh Kumar"
                 className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-bold text-gray-900 outline-none focus:border-black transition-all"
               />
@@ -2320,7 +3309,7 @@ Dhanbad, Asansol, 1h 30m, 60 km, 1200, 1800`);
                 required
                 type="tel" 
                 value={driverDetails.phone}
-                onChange={(e) => setDriverDetails({...driverDetails, phone: e.target.value})}
+                onChange={(e) => setDriverDetails({ ...driverDetails, phone: e.target.value})}
                 placeholder="e.g. 9876543210"
                 className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-bold text-gray-900 outline-none focus:border-black transition-all"
               />
@@ -2332,7 +3321,7 @@ Dhanbad, Asansol, 1h 30m, 60 km, 1200, 1800`);
                 required
                 type="text" 
                 value={driverDetails.vehicle_no}
-                onChange={(e) => setDriverDetails({...driverDetails, vehicle_no: e.target.value})}
+                onChange={(e) => setDriverDetails({ ...driverDetails, vehicle_no: e.target.value})}
                 placeholder="e.g. JH09 AW 1234"
                 className="w-full bg-gray-50 border-2 border-gray-100 rounded-2xl p-4 font-bold text-gray-900 outline-none focus:border-black transition-all uppercase"
               />

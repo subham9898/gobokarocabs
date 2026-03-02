@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ChevronDown, MapPin, ArrowRight, Clock } from 'lucide-react';
 import { RoutePrice } from '../types';
+import { ROUTES_PRICING } from '../constants';
 
 const PriceTable: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'intercity' | 'rentals'>('intercity');
@@ -28,8 +29,9 @@ const PriceTable: React.FC = () => {
     fetchPricing();
   }, []);
 
-  const visibleRoutes = routes.slice(0, visibleCount);
-  const hasMore = activeTab === 'intercity' && visibleCount < routes.length;
+  const visibleRoutes = (routes.length > 0 ? routes : ROUTES_PRICING).slice(0, visibleCount);
+  const totalRoutesCount = routes.length > 0 ? routes.length : ROUTES_PRICING.length;
+  const hasMore = activeTab === 'intercity' && visibleCount < totalRoutesCount;
 
   const handleShowMore = () => {
     setVisibleCount(prev => prev + 10);
@@ -109,11 +111,11 @@ const PriceTable: React.FC = () => {
                             </div>
                           </td>
                           <td className="p-8 text-center bg-lime-50/30">
-                            <span className="text-3xl font-black text-gray-900">₹{route.sedan.toLocaleString()}</span>
+                            <span className="text-3xl font-black text-gray-900">₹{(route.sedan || 0).toLocaleString()}</span>
                             <span className="block text-[10px] font-bold text-lime-600 uppercase mt-1 tracking-widest">Base Fare</span>
                           </td>
                           <td className="p-8 text-center">
-                            <span className="text-3xl font-black text-gray-900">₹{route.ertiga.toLocaleString()}</span>
+                            <span className="text-3xl font-black text-gray-900">₹{(route.ertiga || 0).toLocaleString()}</span>
                             <span className="block text-[10px] font-bold text-gray-400 uppercase mt-1 tracking-widest">Premium Choice</span>
                           </td>
                         </motion.tr>
@@ -152,7 +154,7 @@ const PriceTable: React.FC = () => {
                         <div className="bg-lime-50 p-5 rounded-2xl flex justify-between items-center">
                           <div>
                             <p className="text-[9px] uppercase font-black text-lime-700 tracking-[0.2em] mb-1">Sedan</p>
-                            <p className="text-2xl font-black text-gray-900">₹{route.sedan.toLocaleString()}</p>
+                            <p className="text-2xl font-black text-gray-900">₹{(route.sedan || 0).toLocaleString()}</p>
                           </div>
                           <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-sm text-lime-600">
                             <i className="fas fa-car"></i>
@@ -161,7 +163,7 @@ const PriceTable: React.FC = () => {
                         <div className="bg-gray-50 p-5 rounded-2xl flex justify-between items-center">
                           <div>
                             <p className="text-[9px] uppercase font-black text-gray-500 tracking-[0.2em] mb-1">Ertiga (SUV)</p>
-                            <p className="text-2xl font-black text-gray-900">₹{route.ertiga.toLocaleString()}</p>
+                            <p className="text-2xl font-black text-gray-900">₹{(route.ertiga || 0).toLocaleString()}</p>
                           </div>
                           <div className="w-10 h-10 rounded-full bg-white flex items-center justify-center shadow-sm text-gray-400">
                             <i className="fas fa-shuttle-van"></i>

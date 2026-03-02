@@ -27,7 +27,6 @@ const Testimonials: React.FC = () => {
     <section className="py-24 bg-gray-50 px-4">
       <div className="max-w-7xl mx-auto">
         <div className="text-center mb-16">
-          <span className="text-[#A3E635] font-black text-sm tracking-widest uppercase">Social Proof/Customer Voice</span>
           <h2 className="text-3xl md:text-5xl font-black text-gray-900 mt-2 tracking-tight">Voices of Jharkhand</h2>
         </div>
 

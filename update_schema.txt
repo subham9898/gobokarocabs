@@ -1,0 +1,43 @@
+-- 1. Create Roundtrips Table
+CREATE TABLE public.roundtrips (
+    id uuid NOT NULL DEFAULT gen_random_uuid(),
+    "from" text NOT NULL DEFAULT 'Bokaro'::text,
+    destination text NOT NULL,
+    time text NOT NULL,
+    distance text NOT NULL,
+    sedan integer NOT NULL,
+    ertiga integer NOT NULL,
+    is_bidirectional boolean DEFAULT true,
+    created_at timestamp with time zone DEFAULT now(),
+    CONSTRAINT roundtrips_pkey PRIMARY KEY (id)
+);
+
+-- 2. Create Events Table
+CREATE TABLE public.events (
+    id uuid NOT NULL DEFAULT gen_random_uuid(),
+    name text NOT NULL,
+    description text,
+    base_price_sedan integer NOT NULL DEFAULT 0,
+    base_price_suv integer NOT NULL DEFAULT 0,
+    created_at timestamp with time zone DEFAULT now(),
+    CONSTRAINT events_pkey PRIMARY KEY (id)
+);
+
+-- 3. Enable RLS
+ALTER TABLE public.roundtrips ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.events ENABLE ROW LEVEL SECURITY;
+
+-- 4. Create Public Access Policies
+CREATE POLICY "Allow public read access on roundtrips" ON public.roundtrips FOR SELECT USING (true);
+CREATE POLICY "Allow public read access on events" ON public.events FOR SELECT USING (true);
+
+-- 5. Create Admin Access Policies
+CREATE POLICY "Admin full access on roundtrips" ON public.roundtrips FOR ALL USING (true);
+CREATE POLICY "Admin full access on events" ON public.events FOR ALL USING (true);
+
+-- 6. Insert Initial Events (Optional)
+INSERT INTO public.events (name, description, base_price_sedan, base_price_suv) VALUES
+('Wedding', 'Full day service for marriage ceremonies', 3500, 4500),
+('Corporate Seminar', 'Professional transport for business events', 3000, 4000),
+('Family Function', 'Local group travel for private events', 2500, 3500)
+ON CONFLICT DO NOTHING;
