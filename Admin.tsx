@@ -738,6 +738,11 @@ const Admin: React.FC = () => {
     return matchesSearch && matchesType;
   });
 
+  const filteredEvents = events.filter(e => 
+    e.name.toLowerCase().includes(eventSearch.toLowerCase()) || 
+    e.description.toLowerCase().includes(eventSearch.toLowerCase())
+  );
+
   const filteredTours = tourPackages.filter(t => {
     const matchesSearch = t.title.toLowerCase().includes(tourSearch.toLowerCase()) || 
                          t.description.toLowerCase().includes(tourSearch.toLowerCase());
