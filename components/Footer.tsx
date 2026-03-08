@@ -93,13 +93,18 @@ const Footer: React.FC<FooterProps> = ({ onNavigateHome }) => {
 
         {/* Routes */}
         <div>
-          <h4 className="font-bold text-lg mb-6 uppercase tracking-widest text-[#A3E635]">Top Routes</h4>
+          <h4 
+            className="font-bold text-lg mb-6 uppercase tracking-widest text-[#A3E635] cursor-pointer hover:text-white transition-colors"
+            onClick={(e) => handleNavClick(e, 'pricing')}
+          >
+            Top Routes
+          </h4>
           <ul className="space-y-3 text-gray-400 text-sm">
-            <li>Bokaro ↔ Ranchi</li>
-            <li>Bokaro ↔ Jamshedpur</li>
-            <li>Bokaro ↔ Kolkata</li>
-            <li>Bokaro ↔ Dhanbad</li>
-            <li>Bokaro ↔ Hazaribagh</li>
+            <li className="cursor-pointer hover:text-[#A3E635] transition-colors" onClick={(e) => handleNavClick(e, 'pricing')}>Bokaro ↔ Ranchi</li>
+            <li className="cursor-pointer hover:text-[#A3E635] transition-colors" onClick={(e) => handleNavClick(e, 'pricing')}>Bokaro ↔ Jamshedpur</li>
+            <li className="cursor-pointer hover:text-[#A3E635] transition-colors" onClick={(e) => handleNavClick(e, 'pricing')}>Bokaro ↔ Kolkata</li>
+            <li className="cursor-pointer hover:text-[#A3E635] transition-colors" onClick={(e) => handleNavClick(e, 'pricing')}>Bokaro ↔ Dhanbad</li>
+            <li className="cursor-pointer hover:text-[#A3E635] transition-colors" onClick={(e) => handleNavClick(e, 'pricing')}>Bokaro ↔ Hazaribagh</li>
           </ul>
         </div>
 

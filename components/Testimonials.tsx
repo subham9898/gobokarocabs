@@ -3,22 +3,22 @@ import React from 'react';
 
 const REVIEWS = [
   {
-    name: 'Sandeep Mishra',
+    name: 'Ankit Kumar',
     location: 'Sector 4, Bokaro',
     text: 'Best service for Ranchi airport drops. The driver reached my home 15 mins early and the car was spotless. Truly premium feel.',
-    initials: 'SM'
+    initials: 'AK'
   },
   {
-    name: 'Priya Sharma',
+    name: 'Mayank Sharma',
     location: 'Cooperative Colony',
     text: 'Booked an Ertiga for a family trip to Deoghar. Very professional behavior and the rates were exactly what was shown on the website.',
-    initials: 'PS'
+    initials: 'MS'
   },
   {
-    name: 'Ankit Raj',
+    name: 'Gulam Ansari',
     location: 'Chira Chas',
     text: 'Go Bokaro Cabs is my go-to for corporate trips to Jamshedpur. Reliable, safe, and they provide proper bills for reimbursement.',
-    initials: 'AR'
+    initials: 'GA'
   }
 ];
 
