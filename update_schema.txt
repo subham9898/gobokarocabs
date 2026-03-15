@@ -4,7 +4,7 @@ CREATE TABLE public.roundtrips (
     "from" text NOT NULL DEFAULT 'Bokaro'::text,
     destination text NOT NULL,
     time text NOT NULL,
-    distance text NOT NULL,
+distance text NOT NULL,
     sedan integer NOT NULL,
     ertiga integer NOT NULL,
     is_bidirectional boolean DEFAULT true,

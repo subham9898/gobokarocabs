@@ -6,6 +6,10 @@ import WhatsApp from 'whatsapp-cloud-api';
 import jwt from 'jsonwebtoken';
 import multer from 'multer';
 import { supabase } from "./src/services/supabase/client.ts";
+import * as dotenv from 'dotenv';
+
+// Load environment variables for local development
+dotenv.config();
 
 // Type guard to check if Supabase client is properly configured
 function isSupabaseConfigured(): boolean {
