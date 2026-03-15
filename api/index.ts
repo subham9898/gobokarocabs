@@ -26,8 +26,9 @@ function isSupabaseConfigured(): boolean {
          supabase.from.length > 0;
 }
 
-const upload = multer({ 
-  storage: multer.memoryStorage(),
+const multerAny = (multer as any).default || multer;
+const upload = multerAny({ 
+  storage: multerAny.memoryStorage(),
   limits: {
     fileSize: 5 * 1024 * 1024,
   },
