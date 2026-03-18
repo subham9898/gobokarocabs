@@ -4,7 +4,7 @@ import { fileURLToPath } from "url";
 import WhatsApp from 'whatsapp-cloud-api';
 import jwt from 'jsonwebtoken';
 import multer from 'multer';
-import { supabase } from "../src/services/supabase/client";
+import { createClient } from '@supabase/supabase-js';
 import * as dotenv from 'dotenv';
 
 // Load environment variables for local development
@@ -13,15 +13,72 @@ dotenv.config();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Supabase Configuration embedded directly to avoid module resolution issues in production
+const supabaseUrl = process.env.SUPABASE_URL || '';
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || '';
+const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+const supabaseKey = supabaseServiceRoleKey || supabaseAnonKey;
+
+let supabase: any;
+
+try {
+  if (!supabaseUrl || !supabaseKey) {
+    console.warn("Supabase credentials missing. Database operations will fail.");
+    supabase = {
+      from: () => ({
+        select: () => ({ data: [], error: { message: "Supabase not configured" } }),
+        insert: () => ({ error: { message: "Supabase not configured" } }),
+        update: () => ({ error: { message: "Supabase not configured" } }),
+        delete: () => ({ error: { message: "Supabase not configured" } }),
+        order: () => ({ data: [], error: { message: "Supabase not configured" } }),
+        eq: () => ({ single: () => ({ data: null, error: { message: "Supabase not configured" } }) }),
+      }),
+      auth: {
+        signIn: () => ({ error: { message: "Supabase not configured" } }),
+        signOut: () => ({ error: { message: "Supabase not configured" } }),
+        getUser: () => ({ data: { user: null }, error: { message: "Supabase not configured" } }),
+      },
+      storage: {
+        from: () => ({
+          upload: () => ({ data: null, error: { message: "Supabase not configured" } }),
+          getPublicUrl: () => ({ data: { publicUrl: "" } }),
+        })
+      }
+    };
+  } else {
+    supabase = createClient(supabaseUrl, supabaseKey);
+  }
+} catch (error) {
+  console.error("Critical error initializing Supabase client:", error);
+  supabase = {
+    from: () => ({
+      select: () => ({ data: [], error: { message: "Supabase initialization failed" } }),
+      insert: () => ({ error: { message: "Supabase initialization failed" } }),
+      update: () => ({ error: { message: "Supabase initialization failed" } }),
+      delete: () => ({ error: { message: "Supabase initialization failed" } }),
+      order: () => ({ data: [], error: { message: "Supabase initialization failed" } }),
+      eq: () => ({ single: () => ({ data: null, error: { message: "Supabase initialization failed" } }) }),
+    }),
+    auth: {
+      signIn: () => ({ error: { message: "Supabase initialization failed" } }),
+      signOut: () => ({ error: { message: "Supabase initialization failed" } }),
+      getUser: () => ({ data: { user: null }, error: { message: "Supabase initialization failed" } }),
+    },
+    storage: {
+      from: () => ({
+        upload: () => ({ data: null, error: { message: "Supabase initialization failed" } }),
+        getPublicUrl: () => ({ data: { publicUrl: "" } }),
+      })
+    }
+  };
+}
+
 const JWT_SECRET = process.env.JWT_SECRET || 'fallback-secret-for-dev-only';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
 
 console.log("Server starting...");
 if (!process.env.ADMIN_PASSWORD) {
   console.warn("CRITICAL: ADMIN_PASSWORD environment variable is not set!");
-}
-if (!process.env.JWT_SECRET) {
-  console.warn("WARNING: JWT_SECRET environment variable is not set. Using fallback.");
 }
 
 // Type guard to check if Supabase client is properly configured
@@ -53,7 +110,6 @@ try {
   });
 } catch (error) {
   console.error("Failed to initialize multer:", error);
-  // Fallback upload mock that fails gracefully
   upload = {
     single: () => (req: any, res: any, next: any) => next(new Error("Multer not initialized")),
     any: () => (req: any, res: any, next: any) => next(new Error("Multer not initialized"))
@@ -122,7 +178,7 @@ app.post("/api/admin/login", (req, res) => {
       console.error("Login failed: ADMIN_PASSWORD environment variable is not set.");
       return res.status(500).json({ 
         error: "Server Configuration Error",
-        details: "Admin password not configured on server. Please set ADMIN_PASSWORD in your environment variables."
+        details: "Admin password not configured on server."
       });
     }
 
@@ -246,7 +302,7 @@ app.get("/api/admin/leads", authenticateAdmin, async (req, res) => {
 
     if (error && !data) return res.status(500).json({ error: error.message });
     
-    const mappedLeads = (data || []).map(l => ({
+    const mappedLeads = (data || []).map((l: any) => ({
       ...l,
       vehicleType: l.vehicle_type,
       createdAt: l.created_at,
@@ -758,11 +814,9 @@ app.post("/api/admin/upload-image", authenticateAdmin, upload.single('image'), a
 if (process.env.NODE_ENV === "production") {
   app.use(express.static(path.join(__dirname, "../dist")));
   app.get("*", (req, res) => {
-    // If it's an API request that wasn't caught by the above routes, return 404
     if (req.path.startsWith('/api/')) {
       return res.status(404).json({ error: "API route not found", path: req.path });
     }
-    // For any other request, serve index.html (SPA routing)
     try {
       res.sendFile(path.join(__dirname, "../dist", "index.html"));
     } catch (err) {
@@ -770,7 +824,6 @@ if (process.env.NODE_ENV === "production") {
     }
   });
 } else {
-  // Use dynamic import for Vite to avoid issues in production bundles
   try {
     const { createServer: createViteServer } = await import("vite");
     const vite = await createViteServer({
@@ -783,7 +836,6 @@ if (process.env.NODE_ENV === "production") {
   }
 }
 
-// Global Error Handler
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   console.error("Global Error Handler:", err);
   res.status(500).json({
@@ -793,10 +845,8 @@ app.use((err: any, req: express.Request, res: express.Response, next: express.Ne
   });
 });
 
-// Export for Vercel
 export default app;
 
-// Local development server
 if (process.env.NODE_ENV !== "production" || !process.env.VERCEL) {
   const PORT = process.env.PORT || 3000;
   app.listen(PORT, () => {
