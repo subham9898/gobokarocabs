@@ -82,12 +82,17 @@ const Hero: React.FC = () => {
   const activeEvents = dbEvents.length > 0 ? dbEvents.map(e => e.name) : EVENTS;
 
   const cities = [
+    'Bokaro',
     'Bokaro Steel City',
+    ...routesPricing.map(r => r.from),
     ...routesPricing.map(r => r.destination),
+    ...roundtripPricing.map(r => r.from),
+    ...roundtripPricing.map(r => r.destination),
+    ...rentalData.map(r => r.city),
     'Patna', 'Gaya', 'Deoghar', 'Varanasi', 'Delhi', 'Mumbai', 'Bangalore', 'Chennai', 'Hyderabad',
     'Bhubaneswar', 'Siliguri', 'Puri'
   ];
-  const UNIQUE_CITIES = Array.from(new Set(cities)).sort();
+  const UNIQUE_CITIES = Array.from(new Set(cities.filter(Boolean))).sort();
 
   // Update available hours when "from" (city) changes in Local Rental mode
   useEffect(() => {
