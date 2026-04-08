@@ -32,6 +32,7 @@ const EVENTS = [
 
 const Hero: React.FC = () => {
   const [routesPricing, setRoutesPricing] = useState<RoutePrice[]>([]);
+  const [roundtripPricing, setRoundtripPricing] = useState<RoutePrice[]>([]);
   const [availableCars, setAvailableCars] = useState<any[]>([]);
   const [booking, setBooking] = useState<BookingState>({
     from: '',
@@ -58,14 +59,16 @@ const Hero: React.FC = () => {
   useEffect(() => {
     const fetchAllData = async () => {
       try {
-        const [routesRes, carsRes, rentalsRes, eventsRes] = await Promise.all([
+        const [routesRes, roundtripsRes, carsRes, rentalsRes, eventsRes] = await Promise.all([
           fetch('/api/routes'),
+          fetch('/api/roundtrips'),
           fetch('/api/cars'),
           fetch('/api/rentals'),
           fetch('/api/events')
         ]);
         
         if (routesRes.ok) setRoutesPricing(await routesRes.json());
+        if (roundtripsRes.ok) setRoundtripPricing(await roundtripsRes.json());
         if (carsRes.ok) setAvailableCars(await carsRes.json());
         if (rentalsRes.ok) setRentalData(await rentalsRes.json());
         if (eventsRes.ok) setDbEvents(await eventsRes.json());
@@ -109,6 +112,36 @@ const Hero: React.FC = () => {
   ];
 
   const normalize = (str: string) => str.toLowerCase().trim().replace(' steel city', '');
+
+  const findRoutePrice = (vehicleType: string) => {
+    const from = normalize(booking.from);
+    const to = normalize(booking.to);
+    const isSedan = vehicleType.toLowerCase().includes('sedan');
+    
+    if (booking.tripType === 'One Way') {
+      const route = routesPricing.find(r => 
+        (normalize(r.from || 'Bokaro') === from && normalize(r.destination) === to) ||
+        (normalize(r.from || 'Bokaro') === to && normalize(r.destination) === from && r.is_bidirectional)
+      );
+      if (route) return isSedan ? route.sedan : route.ertiga;
+    } else if (booking.tripType === 'Round Trip') {
+      const route = roundtripPricing.find(r => 
+        (normalize(r.from || 'Bokaro') === from && normalize(r.destination) === to) ||
+        (normalize(r.from || 'Bokaro') === to && normalize(r.destination) === from)
+      );
+      if (route) return isSedan ? route.sedan : route.ertiga;
+    } else if (booking.tripType === 'Local Rental' && booking.rentalHours) {
+      const rental = rentalData.find(r => 
+        normalize(r.city) === from && 
+        `${r.hr} / ${r.km}` === booking.rentalHours
+      );
+      if (rental) return rental.rate;
+    } else if (booking.tripType === 'Event Cabs' && booking.event) {
+      const event = dbEvents.find(e => e.name === booking.event);
+      if (event) return isSedan ? event.base_price_sedan : event.base_price_suv;
+    }
+    return null;
+  };
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -515,17 +548,23 @@ const Hero: React.FC = () => {
                     <div className="space-y-2">
                       <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Vehicle Type</label>
                       <div className="grid grid-cols-2 gap-4">
-                        {(availableCars.length > 0 ? availableCars : [{id:1, name:'Sedan', models:'Dzire'}, {id:2, name:'SUV', models:'Ertiga'}]).map((car) => (
-                          <button 
-                            key={car.id}
-                            type="button"
-                            onClick={() => setLead(prev => ({ ...prev, vehicleType: car.name }))}
-                            className={`p-5 rounded-2xl border-2 flex flex-col items-center justify-center transition-all ${lead.vehicleType === car.name ? 'border-black bg-black text-[#A3E635]' : 'border-gray-100 bg-gray-50 text-gray-400'}`}
-                          >
-                            <span className="font-black text-xs uppercase tracking-widest">{car.name}</span>
-                            <span className={`text-[8px] font-bold mt-1 ${lead.vehicleType === car.name ? 'text-white/60' : 'text-gray-400'}`}>{car.models}</span>
-                          </button>
-                        ))}
+                        {(availableCars.length > 0 ? availableCars : [{id:1, name:'Sedan', models:'Dzire'}, {id:2, name:'SUV', models:'Ertiga'}]).map((car) => {
+                          const price = findRoutePrice(car.name);
+                          return (
+                            <button 
+                              key={car.id}
+                              type="button"
+                              onClick={() => setLead(prev => ({ ...prev, vehicleType: car.name }))}
+                              className={`p-5 rounded-2xl border-2 flex flex-col items-center justify-center transition-all ${lead.vehicleType === car.name ? 'border-black bg-black text-[#A3E635]' : 'border-gray-100 bg-gray-50 text-gray-400'}`}
+                            >
+                              <span className="font-black text-xs uppercase tracking-widest">{car.name}</span>
+                              <span className={`text-[8px] font-bold mt-1 ${lead.vehicleType === car.name ? 'text-white/60' : 'text-gray-400'}`}>{car.models}</span>
+                              {price && (
+                                <span className={`text-sm font-black mt-2 ${lead.vehicleType === car.name ? 'text-[#A3E635]' : 'text-gray-900'}`}>₹{price.toLocaleString()}</span>
+                              )}
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
 

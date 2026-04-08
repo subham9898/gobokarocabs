@@ -1,10 +1,13 @@
 
 export interface RoutePrice {
+  id?: string;
+  from?: string;
   destination: string;
   time: string;
   distance: string;
   sedan: number;
   ertiga: number;
+  is_bidirectional?: boolean;
 }
 
 export type TripType = 'One Way' | 'Round Trip' | 'Local Rental' | 'Event Cabs';
